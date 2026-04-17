@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amasya MYO — Staj Asistanı</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-inner">
+    <div class="header-logo">
+      <span class="logo-icon">🎓</span>
+      <div>
+        <div class="logo-title">Amasya MYO</div>
+        <div class="logo-sub">Staj Başvuru Asistanı</div>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="ogrenci">👨‍🎓 Öğrenci Paneli</button>
+      <button class="tab" data-tab="sekreter">🗂️ Sekreter Paneli</button>
+    </nav>
+  </div>
+</header>
+
+<!-- ══════════════════ ÖĞRENCİ PANELİ ══════════════════ -->
+<div id="tab-ogrenci" class="panel active">
+  <div class="split">
+
+    <!-- SOL -->
+    <aside class="sidebar">
+      <div class="card">
+        <div class="card-head">📋 Kurum Kuralları</div>
+        <div id="kurallar-list" class="rules-list">
+          <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+        </div>
+      </div>
+
+      <div class="card mt">
+        <div class="card-head">🔍 Canlı Form Kontrolü</div>
+        <div id="feedback-box" class="feedback-box">
+          <div class="fb-item info">ℹ️ Formu doldurmaya başlayın…</div>
+        </div>
+      </div>
+
+      <div class="card mt chat-card">
+        <div class="card-head">💬 Yönerge Chatbox</div>
+        <div id="chat-messages" class="chat-messages"></div>
+        <div class="chat-input-row">
+          <input id="chat-input" type="text" placeholder="Yönerge hakkında soru sor…" autocomplete="off">
+          <button id="chat-send" class="btn-icon" title="Gönder">➤</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- SAĞ: FORM -->
+    <main class="form-area">
+      <div class="card">
+        <div class="card-head">👤 Öğrenci Bilgileri</div>
+        <div class="form-grid">
+          <div class="field"><label>Ad Soyad <span class="req">*</span></label>
+            <input type="text" id="ad_soyad" placeholder="Örn: Ahmet Yılmaz"></div>
+          <div class="field"><label>Öğrenci No <span class="req">*</span></label>
+            <input type="text" id="ogrenci_no" placeholder="Örn: 20210001"></div>
+          <div class="field"><label>Bölüm / Program <span class="req">*</span></label>
+            <input type="text" id="bolum" placeholder="Örn: Bilgisayar Teknolojisi"></div>
+          <div class="field"><label>TC Kimlik No <span class="req">*</span></label>
+            <input type="text" id="tc_kimlik_no" maxlength="11" placeholder="11 haneli TC"></div>
+          <div class="field"><label>Eğitim Dönemi</label>
+            <select id="donem"><option>Güz</option><option>Bahar</option></select></div>
+          <div class="field"><label>Telefon No</label>
+            <input type="text" id="telefon_no" placeholder="05XX XXX XX XX"></div>
+          <div class="field full"><label>İkametgah Adresi</label>
+            <input type="text" id="ikametgah_adresi" placeholder="Tam adres…"></div>
+        </div>
+      </div>
+
+      <div class="card mt">
+        <div class="card-head">🏢 Staj Bilgileri</div>
+        <div class="form-grid">
+          <div class="field full"><label>Firma Adı <span class="req">*</span></label>
+            <input type="text" id="firma_adi" placeholder="Örn: ABC Mühendislik A.Ş."></div>
+          <div class="field full"><label>Firma Adresi <span class="req">*</span></label>
+            <input type="text" id="firma_adresi" placeholder="Tam adres…"></div>
+          <div class="field"><label>Hizmet Alanı</label>
+            <input type="text" id="hizmet_alani" placeholder="Örn: Yazılım Geliştirme"></div>
+          <div class="field"><label>Haftalık Çalışma Günü</label>
+            <input type="number" id="haftalik_calisilan_gun" min="1" max="7" value="5"></div>
+          <div class="field"><label>Firma Telefon</label>
+            <input type="text" id="firma_telefon" placeholder="0312 XXX XX XX"></div>
+          <div class="field"><label>Firma E-posta</label>
+            <input type="email" id="firma_eposta" placeholder="info@firma.com"></div>
+          <div class="field"><label>Firma Web</label>
+            <input type="text" id="firma_web" placeholder="www.firma.com"></div>
+          <div class="field"><label>Firma Fax</label>
+            <input type="text" id="firma_fax"></div>
+          <div class="field"><label>Başlangıç Tarihi <span class="req">*</span></label>
+            <input type="date" id="baslangic_tarihi"></div>
+          <div class="field"><label>Bitiş Tarihi <span class="req">*</span></label>
+            <input type="date" id="bitis_tarihi"></div>
+          <div class="field"><label>Staj Gün Sayısı <span class="req">*</span></label>
+            <input type="number" id="staj_gun_sayisi" min="1" placeholder="Örn: 30"></div>
+        </div>
+      </div>
+
+      <div class="card mt collapsible">
+        <div class="card-head toggle-head" onclick="toggleSection(this)">
+          🏭 Departman Bilgileri <span class="toggle-arrow">▾</span>
+        </div>
+        <div class="collapsible-body form-grid" style="display:none">
+          <div class="field"><label>Departman 1</label><input type="text" id="departman_1"></div>
+          <div class="field"><label>Departman 2</label><input type="text" id="departman_2"></div>
+          <div class="field"><label>Departman 3</label><input type="text" id="departman_3"></div>
+          <div class="field"><label>Departman 4</label><input type="text" id="departman_4"></div>
+          <div class="field"><label>Yönetici Sayısı</label><input type="number" id="personel_yonetici" min="0" value="0"></div>
+          <div class="field"><label>Mühendis Sayısı</label><input type="number" id="personel_muhendis" min="0" value="0"></div>
+          <div class="field"><label>Tekniker Sayısı</label><input type="number" id="personel_tekniker" min="0" value="0"></div>
+          <div class="field"><label>Usta Sayısı</label><input type="number" id="personel_usta" min="0" value="0"></div>
+          <div class="field"><label>Teknisyen Sayısı</label><input type="number" id="personel_teknisyen" min="0" value="0"></div>
+          <div class="field"><label>İşçi Sayısı</label><input type="number" id="personel_isci" min="0" value="0"></div>
+        </div>
+      </div>
+
+      <!-- PDF BUTONLARI -->
+      <div class="card mt">
+        <div class="card-head">📄 PDF İşlemleri</div>
+        <div class="pdf-actions">
+          <button id="btn-pdf" class="btn btn-primary" onclick="generatePDF()">
+            <span>📥</span> PDF Oluştur & İndir
+          </button>
+          <div class="upload-area" id="upload-area">
+            <input type="file" id="pdf-file" accept=".pdf" hidden>
+            <button class="btn btn-outline" onclick="document.getElementById('pdf-file').click()">
+              <span>📂</span> PDF Seç
+            </button>
+            <span id="file-name" class="file-name">Dosya seçilmedi</span>
+            <button id="btn-gonder" class="btn btn-success" onclick="gonderPDF()" disabled>
+              <span>🚀</span> Sekretere Gönder
+            </button>
+          </div>
+        </div>
+        <div id="yukle-result" class="yukle-result" style="display:none"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ══════════════════ SEKRETER PANELİ ══════════════════ -->
+<div id="tab-sekreter" class="panel" style="display:none">
+  <div class="sekreter-wrapper">
+    <div class="sekreter-header">
+      <h2>🗂️ Sekreter Paneli</h2>
+      <button class="btn btn-outline btn-sm" onclick="loadBasvurular()">🔄 Yenile</button>
+    </div>
+
+    <div class="metrics" id="metrics-row">
+      <div class="metric-card"><div class="metric-val" id="m-toplam">—</div><div class="metric-lbl">Toplam</div></div>
+      <div class="metric-card green"><div class="metric-val" id="m-kabul">—</div><div class="metric-lbl">✅ Kabul</div></div>
+      <div class="metric-card red"><div class="metric-val" id="m-red">—</div><div class="metric-lbl">❌ Red</div></div>
+      <div class="metric-card yellow"><div class="metric-val" id="m-bekle">—</div><div class="metric-lbl">⏳ Beklemede</div></div>
+    </div>
+
+    <div id="basvuru-list" class="basvuru-list">
+      <div class="empty-state">Yükleniyor…</div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="toast"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

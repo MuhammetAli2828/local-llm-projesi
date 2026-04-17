@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+.venv/
+*.egg-info/
+
+# Uploaded & generated files
+uploads/
+data/outputs/
+data/processed/
+data/raw/
+
+# Databases
+*.db
+
+# PDFs & documents
+*.pdf
+
+# Models / large files
+*.bin
+*.gguf
+*.ggml
+
+# OS
+.DS_Store
+Thumbs.db
