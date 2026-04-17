@@ -4,7 +4,7 @@ import json
 import random
 from pathlib import Path
 
-BASE = Path(__file__).resolve().parent.parent
+BASE = Path(__file__).resolve().parent.parent # Amasya Üniversitesi Staj Asistanı projesinin kök dizini
 PROCESSED = BASE / "data" / "processed"
 
 SYSTEM_QA = "Sen Amasya Üniversitesi staj asistanısın. Yürürlükteki staj yönergesi ve staj takvimine göre kısa, net ve doğru cevap ver."

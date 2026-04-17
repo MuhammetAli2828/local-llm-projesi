@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python calibrate_pdf.py)",
+      "Bash(python -c \":*)"
+    ]
+  }
+}
