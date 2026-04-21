@@ -34,9 +34,9 @@
   <!-- DÖNEM BANNERI — split dışında -->
   <div id="donem-banner" class="donem-banner" style="display:none"></div>
 
-  <div class="split">
+  <div class="split3">
 
-    <!-- SOL -->
+    <!-- SOL: kurallar + form kontrolü -->
     <aside class="sidebar">
       <div class="card">
         <div class="card-head">📋 Kurum Kuralları</div>
@@ -51,19 +51,9 @@
           <div class="fb-item info">ℹ️ Formu doldurmaya başlayın…</div>
         </div>
       </div>
-
-      <div class="card mt chat-card">
-        <div class="card-head">💬 Staj Asistanı</div>
-        <div id="chat-chips" class="chat-chips"></div>
-        <div id="chat-messages" class="chat-messages"></div>
-        <div class="chat-input-row">
-          <input id="chat-input" type="text" placeholder="Staj hakkında bir şey sor…" autocomplete="off">
-          <button id="chat-send" class="btn-icon" title="Gönder">➤</button>
-        </div>
-      </div>
     </aside>
 
-    <!-- SAĞ: FORM -->
+    <!-- ORTA: FORM -->
     <main class="form-area">
       <div class="card">
         <div class="card-head">👤 Öğrenci Bilgileri</div>
@@ -155,6 +145,27 @@
         <div id="yukle-result" class="yukle-result" style="display:none"></div>
       </div>
     </main>
+
+    <!-- SAĞ: CHAT -->
+    <aside class="chat-panel">
+      <div class="chat-panel-card">
+        <div class="chat-panel-head">
+          <span class="chat-panel-icon">🤖</span>
+          <div>
+            <div class="chat-panel-title">Staj Asistanı</div>
+            <div class="chat-panel-sub">Yönerge hakkında soru sor</div>
+          </div>
+          <button class="chat-clear-btn" onclick="clearChat()" title="Sohbeti temizle">🗑️</button>
+        </div>
+        <div id="chat-chips" class="chat-chips"></div>
+        <div id="chat-messages" class="chat-messages chat-messages-lg"></div>
+        <div class="chat-input-row">
+          <input id="chat-input" type="text" placeholder="Bir şey sor…" autocomplete="off">
+          <button id="chat-send" class="btn-icon" title="Gönder">➤</button>
+        </div>
+      </div>
+    </aside>
+
   </div>
 </div>
 
