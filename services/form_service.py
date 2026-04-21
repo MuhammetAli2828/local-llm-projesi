@@ -111,3 +111,117 @@ def normalize_date(value: Any) -> str | None:
         d, mo, y = map(int, m.groups())
         return f"{y:04d}-{mo:02d}-{d:02d}"
     return None
+
+
+# ─── PDF'DEN FORM ALANI ÇIKARIMI ──────────────────────────────────────────────
+def _clean(s: str) -> str:
+    """Label ardındaki boşluk, nokta, tire temizle."""
+    return re.sub(r"\s+", " ", (s or "").strip(" :.-·—_\t"))
+
+
+def extract_fields_from_pdf_text(pdf_text: str) -> Dict[str, Any]:
+    """
+    Amasya MYO staj başvuru formu PDF metninden regex ile alanları çıkarır.
+    Döndürülen dict form şeması anahtarlarını kullanır.
+    """
+    if not pdf_text:
+        return {}
+
+    t = pdf_text.replace("\r", "\n")
+    # Satır sonlarını normalize et
+    lines = [ln.strip() for ln in t.split("\n") if ln.strip()]
+    joined = " | ".join(lines)
+
+    def find(patterns) -> str:
+        """Verilen regex desenleri arasında ilk eşleşmeyi döner."""
+        if isinstance(patterns, str):
+            patterns = [patterns]
+        for pat in patterns:
+            m = re.search(pat, joined, re.IGNORECASE)
+            if m:
+                val = _clean(m.group(1))
+                # "|" karakterine kadar al (satır ayracı)
+                val = val.split(" | ")[0].split("  ")[0]
+                if val and val not in (":", "-"):
+                    return val
+        return ""
+
+    extracted: Dict[str, Any] = {}
+
+    # Öğrenci
+    extracted["ad_soyad"] = find([
+        r"Ad[ıi]\s*Soyad[ıi]\s*[:：]?\s*([^|]{2,80})",
+    ])
+    extracted["ogrenci_no"] = find([
+        r"[ÖOöo]ğ?renci\s*No\s*[:：]?\s*(\d{6,12})",
+    ])
+    extracted["bolum"] = find([
+        r"B[öo]l[üu]m[üu]?\s*/?\s*(?:Program[ıi])?\s*[:：]\s*([^|:]{3,60}?)(?=\s{2,}|\s*TC\s|\s*T\.C|\s*\||\s*Ad[ıi]\s|$)",
+        r"Program[ıi]\s*[:：]\s*([^|:]{3,60}?)(?=\s{2,}|\s*\||$)",
+    ])
+    extracted["tc_kimlik_no"] = find([
+        r"TC\s*Kimlik\s*No\s*[:：]?\s*(\d{11})",
+        r"T\.?C\.?\s*Kimlik\s*[:：]?\s*(\d{11})",
+    ])
+    extracted["telefon_no"] = find([
+        r"(?:Telefon\s*No|Cep\s*Telefonu?)\s*[:：]?\s*(\+?\d[\d\s\-]{8,20})",
+    ])
+    extracted["ikametgah_adresi"] = find([
+        r"[İI]kametg[âa]h?\s*Adresi\s*[:：]?\s*([^|]{5,200})",
+    ])
+
+    # Firma
+    extracted["firma_adi"] = find([
+        r"(?:STAJ YAPILAN YER[İI]N|STAJ YAPACA[ĞG]I YER).*?Ad[ıi]\s*[:：]?\s*([^|]{3,120})",
+        r"Firma\s*Ad[ıi]\s*[:：]?\s*([^|]{3,120})",
+        r"Kurum\s*Ad[ıi]\s*[:：]?\s*([^|]{3,120})",
+    ])
+    # Firma adresi: "STAJ YAPILAN" bölümünden sonra gelen "Adresi :" — ikametgah hariç
+    m_fa = re.search(
+        r"STAJ\s*YAPI?LAN[^|]*?Ad[ıi]\s*[:：][^|]*?\|\s*Adresi\s*[:：]\s*([^|]{5,200})",
+        joined, re.IGNORECASE,
+    )
+    if m_fa:
+        extracted["firma_adresi"] = _clean(m_fa.group(1)).split("  ")[0]
+    else:
+        # Fallback: "İkametgah" içermeyen ilk "Adresi :"
+        for m in re.finditer(r"(?<!kametg[âa]h\s)Adresi\s*[:：]\s*([^|]{5,200})", joined, re.IGNORECASE):
+            val = _clean(m.group(1)).split("  ")[0]
+            if val:
+                extracted["firma_adresi"] = val
+                break
+
+    extracted["hizmet_alani"] = find([
+        r"Hizmet\s*Alan[ıi]\s*[:：]\s*([^|:]{3,80}?)(?=\s{2,}|\s*\||\s*Haftal[ıi]k|$)",
+    ])
+    extracted["haftalik_calisilan_gun"] = find([
+        r"Haftal[ıi]k\s*(?:[ÇçCc]al[ıi][şs][ıi]lan\s*)?G[üu]n\s*[:：]?\s*(\d{1,2})",
+    ])
+    extracted["firma_telefon"] = find([
+        r"(?:Firma\s*)?Telefon(?:\s*No)?\s*[:：]?\s*(\+?\d[\d\s\-()]{8,22})",
+    ])
+    extracted["firma_eposta"] = find([
+        r"E[\-\s]?posta(?:\s*Adresi)?\s*[:：]?\s*([\w\.\-]+@[\w\.\-]+\.\w+)",
+    ])
+    extracted["firma_web"] = find([
+        r"Web(?:\s*Adresi)?\s*[:：]?\s*((?:https?://)?[\w\.\-]+\.\w{2,}[\w/\.\-]*)",
+    ])
+
+    # Tarihler: dd.mm.yyyy veya dd/mm/yyyy biçiminde
+    bas = find([
+        r"(?:Staj[ıi]n)?\s*Ba[şs]lama\s*Tarihi\s*[:：]?\s*(\d{1,2}[./\-]\d{1,2}[./\-]\d{4})",
+        r"Ba[şs]lang[ıi][çc]\s*Tarihi\s*[:：]?\s*(\d{1,2}[./\-]\d{1,2}[./\-]\d{4})",
+    ])
+    bit = find([
+        r"(?:Staj[ıi]n)?\s*Biti[şs]\s*Tarihi\s*[:：]?\s*(\d{1,2}[./\-]\d{1,2}[./\-]\d{4})",
+    ])
+    if bas: extracted["baslangic_tarihi"] = normalize_date(bas) or bas
+    if bit: extracted["bitis_tarihi"]     = normalize_date(bit) or bit
+
+    extracted["staj_gun_sayisi"] = find([
+        r"(\d{1,3})\s*i[şs]\s*g[üu]n[üu]",
+        r"(?:Staj\s*)?G[üu]n\s*Say[ıi]s[ıi]\s*[:：]?\s*(\d{1,3})",
+    ])
+
+    # Boş değerleri temizle
+    return {k: v for k, v in extracted.items() if v and str(v).strip()}

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Giriş — Amasya MYO Staj Asistanı</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-body">
+
+<div class="login-wrapper">
+  <div class="login-card">
+    <div class="login-logo">
+      <span class="login-icon">🎓</span>
+      <div class="login-title">Amasya MYO</div>
+      <div class="login-sub">Staj Başvuru Asistanı</div>
+    </div>
+
+    {% if error %}
+    <div class="login-error">❌ {{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="/login" class="login-form">
+      <div class="login-field">
+        <label>Kullanıcı Adı</label>
+        <input type="text" name="username" placeholder="ogrenci veya sekreter"
+               autocomplete="username" autofocus required>
+      </div>
+      <div class="login-field">
+        <label>Şifre</label>
+        <input type="password" name="password" placeholder="••••••••"
+               autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn-primary login-btn">Giriş Yap →</button>
+    </form>
+
+    <div class="login-hint">
+      <span>👨‍🎓 Öğrenci: <code>ogrenci / ogrenci123</code></span>
+      <span>🗂️ Sekreter: <code>sekreter / sekreter123</code></span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -18,15 +18,22 @@
         <div class="logo-sub">Staj Başvuru Asistanı</div>
       </div>
     </div>
-    <nav class="tabs">
-      <button class="tab active" data-tab="ogrenci">👨‍🎓 Öğrenci Paneli</button>
-      <button class="tab" data-tab="sekreter">🗂️ Sekreter Paneli</button>
-    </nav>
+    <div class="header-right">
+      <span class="role-badge">
+        {% if role == "sekreter" %}🗂️ Sekreter{% else %}👨‍🎓 Öğrenci{% endif %}
+      </span>
+      <a href="/logout" class="btn btn-outline btn-sm">Çıkış</a>
+    </div>
   </div>
 </header>
 
 <!-- ══════════════════ ÖĞRENCİ PANELİ ══════════════════ -->
-<div id="tab-ogrenci" class="panel active">
+<div id="tab-ogrenci" class="panel{% if role == 'ogrenci' %} active{% endif %}"
+     style="{% if role != 'ogrenci' %}display:none{% endif %}">
+
+  <!-- DÖNEM BANNERI — split dışında -->
+  <div id="donem-banner" class="donem-banner" style="display:none"></div>
+
   <div class="split">
 
     <!-- SOL -->
@@ -46,10 +53,11 @@
       </div>
 
       <div class="card mt chat-card">
-        <div class="card-head">💬 Yönerge Chatbox</div>
+        <div class="card-head">💬 Staj Asistanı</div>
+        <div id="chat-chips" class="chat-chips"></div>
         <div id="chat-messages" class="chat-messages"></div>
         <div class="chat-input-row">
-          <input id="chat-input" type="text" placeholder="Yönerge hakkında soru sor…" autocomplete="off">
+          <input id="chat-input" type="text" placeholder="Staj hakkında bir şey sor…" autocomplete="off">
           <button id="chat-send" class="btn-icon" title="Gönder">➤</button>
         </div>
       </div>
@@ -100,6 +108,9 @@
             <input type="date" id="baslangic_tarihi"></div>
           <div class="field"><label>Bitiş Tarihi <span class="req">*</span></label>
             <input type="date" id="bitis_tarihi"></div>
+          <div class="field full">
+            <div id="tarih-hesap" class="tarih-hesap" style="display:none"></div>
+          </div>
           <div class="field"><label>Staj Gün Sayısı <span class="req">*</span></label>
             <input type="number" id="staj_gun_sayisi" min="1" placeholder="Örn: 30"></div>
         </div>
@@ -148,23 +159,123 @@
 </div>
 
 <!-- ══════════════════ SEKRETER PANELİ ══════════════════ -->
-<div id="tab-sekreter" class="panel" style="display:none">
-  <div class="sekreter-wrapper">
-    <div class="sekreter-header">
-      <h2>🗂️ Sekreter Paneli</h2>
-      <button class="btn btn-outline btn-sm" onclick="loadBasvurular()">🔄 Yenile</button>
+<div id="tab-sekreter" class="panel{% if role == 'sekreter' %} active{% endif %}"
+     style="{% if role != 'sekreter' %}display:none{% endif %}">
+  <div class="sek-layout">
+
+    <!-- ÜST BAR -->
+    <div class="sek-topbar">
+      <div class="sek-topbar-left">
+        <div class="sek-title-group">
+          <span class="sek-title-icon">🗂️</span>
+          <div>
+            <div class="sek-title">Sekreter Paneli</div>
+            <div class="sek-subtitle">Başvuru yönetim ekranı</div>
+          </div>
+        </div>
+      </div>
+      <div class="sek-topbar-right">
+        <button class="btn btn-outline btn-sm" onclick="exportCSV()">📥 CSV İndir</button>
+        <button class="btn btn-primary btn-sm" onclick="loadBasvurular()">🔄 Yenile</button>
+      </div>
     </div>
 
-    <div class="metrics" id="metrics-row">
-      <div class="metric-card"><div class="metric-val" id="m-toplam">—</div><div class="metric-lbl">Toplam</div></div>
-      <div class="metric-card green"><div class="metric-val" id="m-kabul">—</div><div class="metric-lbl">✅ Kabul</div></div>
-      <div class="metric-card red"><div class="metric-val" id="m-red">—</div><div class="metric-lbl">❌ Red</div></div>
-      <div class="metric-card yellow"><div class="metric-val" id="m-bekle">—</div><div class="metric-lbl">⏳ Beklemede</div></div>
+    <!-- METRİKLER -->
+    <div class="sek-metrics">
+      <div class="sek-metric">
+        <div class="sek-metric-icon" style="background:#e0e7ff;color:#4f46e5">📋</div>
+        <div class="sek-metric-body">
+          <div class="sek-metric-val" id="m-toplam">—</div>
+          <div class="sek-metric-lbl">Toplam Başvuru</div>
+        </div>
+      </div>
+      <div class="sek-metric">
+        <div class="sek-metric-icon" style="background:#d1fae5;color:#059669">✅</div>
+        <div class="sek-metric-body">
+          <div class="sek-metric-val" id="m-kabul">—</div>
+          <div class="sek-metric-lbl">Kabul Edilen</div>
+        </div>
+      </div>
+      <div class="sek-metric">
+        <div class="sek-metric-icon" style="background:#fee2e2;color:#dc2626">❌</div>
+        <div class="sek-metric-body">
+          <div class="sek-metric-val" id="m-red">—</div>
+          <div class="sek-metric-lbl">Reddedilen</div>
+        </div>
+      </div>
+      <div class="sek-metric">
+        <div class="sek-metric-icon" style="background:#fef3c7;color:#d97706">⏳</div>
+        <div class="sek-metric-body">
+          <div class="sek-metric-val" id="m-bekle">—</div>
+          <div class="sek-metric-lbl">Beklemede</div>
+        </div>
+      </div>
     </div>
 
-    <div id="basvuru-list" class="basvuru-list">
+    <!-- FİLTRE BAR -->
+    <div class="sek-filter-bar">
+      <div class="sek-search-wrap">
+        <span class="sek-search-icon">🔍</span>
+        <input id="sek-search" type="text" class="sek-search"
+               placeholder="Ad, öğrenci no veya firma ara…"
+               oninput="filterBasvurular()">
+      </div>
+      <div class="sek-filter-btns">
+        <button class="sek-filter-btn active" data-filter="hepsi" onclick="setFilter(this,'hepsi')">Hepsi</button>
+        <button class="sek-filter-btn" data-filter="beklemede" onclick="setFilter(this,'beklemede')">⏳ Bekleyen</button>
+        <button class="sek-filter-btn" data-filter="KABUL" onclick="setFilter(this,'KABUL')">✅ Kabul</button>
+        <button class="sek-filter-btn" data-filter="RED" onclick="setFilter(this,'RED')">❌ Red</button>
+      </div>
+    </div>
+
+    <!-- STAJ DÖNEMİ AYARLARI -->
+    <div class="sek-donem-card">
+      <div class="sek-donem-head">
+        <span>📅 Staj Dönemi Ayarları</span>
+        <button class="btn btn-outline btn-sm" onclick="toggleDonemEdit()">✏️ Düzenle</button>
+      </div>
+      <div id="donem-display" class="sek-donem-display">Yükleniyor…</div>
+      <div id="donem-form" class="sek-donem-form" style="display:none">
+        <!-- YAZ DÖNEMİ -->
+        <div class="sd-group-title">☀️ Yaz Dönemi</div>
+        <div class="sek-donem-grid">
+          <div class="field"><label>Dönem Adı</label>
+            <input type="text" id="sd-yaz-adi" placeholder="2025-2026 Yaz Dönemi"></div>
+          <div class="field"><label>Staj Başlangıç</label>
+            <input type="date" id="sd-yaz-bas"></div>
+          <div class="field"><label>Staj Bitiş</label>
+            <input type="date" id="sd-yaz-bit"></div>
+          <div class="field"><label>Başvuru Son Gün</label>
+            <input type="date" id="sd-yaz-son"></div>
+          <div class="field"><label>Min. Staj Günü</label>
+            <input type="number" id="sd-yaz-min" min="1" max="90"></div>
+        </div>
+        <!-- ARA DÖNEMİ -->
+        <div class="sd-group-title">❄️ Ara Dönem</div>
+        <div class="sek-donem-grid">
+          <div class="field"><label>Dönem Adı</label>
+            <input type="text" id="sd-ara-adi" placeholder="2025-2026 Ara Dönem"></div>
+          <div class="field"><label>Staj Başlangıç</label>
+            <input type="date" id="sd-ara-bas"></div>
+          <div class="field"><label>Staj Bitiş</label>
+            <input type="date" id="sd-ara-bit"></div>
+          <div class="field"><label>Başvuru Son Gün</label>
+            <input type="date" id="sd-ara-son"></div>
+          <div class="field"><label>Min. Staj Günü</label>
+            <input type="number" id="sd-ara-min" min="1" max="90"></div>
+        </div>
+        <div class="sek-donem-actions">
+          <button class="btn btn-primary btn-sm" onclick="saveDonem()">💾 Kaydet</button>
+          <button class="btn btn-outline btn-sm" onclick="toggleDonemEdit()">İptal</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- BAŞVURU LİSTESİ -->
+    <div id="basvuru-list" class="sek-list">
       <div class="empty-state">Yükleniyor…</div>
     </div>
+
   </div>
 </div>
 
