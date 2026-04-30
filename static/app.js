@@ -245,20 +245,25 @@ async function gonderPDF() {
     }
 
     resultBox.style.display = 'block';
-    const isKabul = data.karar === 'KABUL';
-    resultBox.className = 'yukle-result ' + (isKabul ? 'kabul' : 'red');
     const eksikler = (data.eksikler || []).map(e =>
       typeof e === 'string' ? e : (e.alan || e.label || e.key || JSON.stringify(e))
     );
-    const eksikHtml = eksikler.length ? `<br><strong>Eksik Alanlar:</strong> ${eksikler.join(', ')}` : '';
     const t = data.tarihler || {};
     const tarihHtml = (t.baslangic || t.bitis)
-      ? `<br><span style="font-size:0.85em;opacity:.8">📅 ${t.baslangic||'?'} → ${t.bitis||'?'}${t.staj_gun ? ` | ${t.staj_gun} gün` : ''}</span>`
+      ? `<div class="gonderme-tarih">📅 ${t.baslangic||'?'} → ${t.bitis||'?'}${t.staj_gun ? ` · ${t.staj_gun} gün` : ''}</div>`
       : '';
+    const isKabul = data.karar === 'KABUL';
+    const eksikHtml = eksikler.length
+      ? `<div class="gonderme-eksik">⚠️ Eksik alanlar: ${eksikler.join(', ')}</div>` : '';
+    resultBox.className = 'yukle-result ' + (isKabul ? 'kabul' : 'red');
     resultBox.innerHTML =
-      `<strong>${isKabul ? '✅ KABUL' : '❌ RED'}</strong> — Başvuru ID: #${data.id}<br>` +
-      `${data.mesaj}${eksikHtml}${tarihHtml}`;
-    showToast(isKabul ? '✅ Başvuru kabul edildi!' : '❌ Başvuru reddedildi.');
+      `<div class="gonderme-baslik">${isKabul ? '✅ Başvurunuz Onaylandı' : '❌ Başvurunuz Reddedildi'} — #${data.id}</div>` +
+      `<div class="gonderme-aciklama">${data.mesaj || ''}</div>` +
+      `${tarihHtml}${eksikHtml}` +
+      `<div class="gonderme-bilgi">${isKabul
+        ? '🎉 Tebrikler! Başvurunuz AI değerlendirmesinde uygun bulundu. Sekreter ek bir gözden geçirme yapabilir.'
+        : 'ℹ️ Lütfen eksikleri tamamlayıp yeniden başvurun.'}</div>`;
+    showToast(isKabul ? '✅ Başvurunuz onaylandı!' : '❌ Başvurunuz reddedildi.');
   } catch (e) {
     resultBox.style.display = 'block';
     resultBox.className = 'yukle-result red';
@@ -336,6 +341,44 @@ async function sendChat() {
     typing.classList.remove('typing');
     _chatHistory.push({ role: 'assistant', content: data.yanit });
     if (_chatHistory.length > 20) _chatHistory = _chatHistory.slice(-20);
+
+    // Form alanı verisi geldiyse otomatik doldur
+    if (data.form_data && Object.keys(data.form_data).length > 0) {
+      const ALAN_ADLARI = {
+        baslangic_tarihi: 'Başlangıç',
+        bitis_tarihi:     'Bitiş',
+        staj_gun_sayisi:  'Staj Günü',
+        firma_adi:        'Firma Adı',
+        firma_adresi:     'Firma Adresi',
+        hizmet_alani:     'Hizmet Alanı',
+        bolum:            'Bölüm',
+        ad_soyad:         'Ad Soyad',
+        ogrenci_no:       'Öğrenci No',
+        tc_kimlik_no:     'TC Kimlik',
+      };
+      const satirlar = [];
+      Object.entries(data.form_data).forEach(([key, val]) => {
+        const el = document.getElementById(key);
+        if (el) {
+          el.value = val;
+          // Yeşil highlight animasyonu
+          el.classList.add('autofill-flash');
+          setTimeout(() => el.classList.remove('autofill-flash'), 2000);
+          const etiket = ALAN_ADLARI[key] || key;
+          const gosterim = key.includes('tarih') ? val.split('-').reverse().join('.') : val;
+          satirlar.push(`<span class="autofill-row"><span class="autofill-key">${etiket}:</span> <span class="autofill-val">${gosterim}</span></span>`);
+        }
+      });
+      if (satirlar.length) {
+        hesaplaTarih();
+        runValidate();
+        const bilgi = document.createElement('div');
+        bilgi.className = 'chat-msg bot autofill-msg';
+        bilgi.innerHTML = `<div class="autofill-head">🤖 Form otomatik dolduruldu</div>${satirlar.join('')}`;
+        chatMessages.appendChild(bilgi);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+    }
   } catch {
     typing.textContent = '❌ Bağlantı hatası.';
   } finally {
@@ -360,15 +403,15 @@ let _allRows = [];
 let _activeFilter = 'hepsi';
 
 async function loadBasvurular() {
-  const list = document.getElementById('basvuru-list');
+  const list = document.getElementById('tab-basvurular');
   if (!list) return;
   list.innerHTML = '<div class="empty-state">⏳ Yükleniyor…</div>';
   try {
     const res  = await fetch('/api/basvurular');
     _allRows   = await res.json();
     const t  = _allRows.length;
-    const k  = _allRows.filter(r => r.ai_karar === 'KABUL').length;
-    const rd = _allRows.filter(r => r.ai_karar === 'RED').length;
+    const k  = _allRows.filter(r => r.durum === 'onaylandi').length;
+    const rd = _allRows.filter(r => r.durum === 'reddedildi').length;
     const b  = _allRows.filter(r => r.durum === 'beklemede').length;
     document.getElementById('m-toplam').textContent = t;
     document.getElementById('m-kabul').textContent  = k;
@@ -381,38 +424,93 @@ async function loadBasvurular() {
 }
 
 function renderList(rows) {
-  const list = document.getElementById('basvuru-list');
+  const list = document.getElementById('tab-basvurular');
   if (!rows.length) { list.innerHTML = '<div class="empty-state">📭 Başvuru yok.</div>'; return; }
   list.innerHTML = rows.map(r => {
-    const karar    = r.ai_karar || '—';
-    const badgeCls = karar === 'KABUL' ? 'kabul' : karar === 'RED' ? 'red' : 'bekle';
-    const cardCls  = karar === 'KABUL' ? 'kabul-card' : karar === 'RED' ? 'red-card' : 'bekle-card';
-    const icon     = karar === 'KABUL' ? '✅' : karar === 'RED' ? '❌' : '⏳';
+    // Gerçek karar: durum (sekreter kararı) — AI önerisi: ai_karar
+    const durum    = r.durum || 'beklemede';
+    const aiOneri  = r.ai_karar || '—';
+    const bekleyen = durum === 'beklemede';
+    const cardCls  = durum === 'onaylandi' ? 'kabul-card' : durum === 'reddedildi' ? 'red-card' : 'bekle-card';
+    const durumIcon = durum === 'onaylandi' ? '✅' : durum === 'reddedildi' ? '❌' : '⏳';
+    const durumLabel = durum === 'onaylandi' ? 'Onaylandı' : durum === 'reddedildi' ? 'Reddedildi' : 'Beklemede';
+    const durumBadgeCls = durum === 'onaylandi' ? 'kabul' : durum === 'reddedildi' ? 'red' : 'bekle';
+
     let ext = {}; try { ext = JSON.parse(r.extracted_json || '{}'); } catch {}
     let eks = []; try { eks = JSON.parse(r.missing_json || '[]'); } catch {}
-    const infoHtml = ['ad_soyad','ogrenci_no','bolum','firma_adi','baslangic_tarihi','bitis_tarihi','staj_gun_sayisi']
-      .filter(k => ext[k]).map(k => `<div class="info-row"><strong>${k}:</strong> ${ext[k]}</div>`).join('');
+    let aiD = {}; try { aiD = JSON.parse(r.ai_detay_json || '{}'); } catch {}
+
+    const infoHtml = [
+      ['Ad Soyad','ad_soyad'],['Öğrenci No','ogrenci_no'],['Bölüm','bolum'],
+      ['Firma','firma_adi'],['Başlangıç','baslangic_tarihi'],['Bitiş','bitis_tarihi'],['Gün','staj_gun_sayisi']
+    ].filter(([,k]) => ext[k])
+     .map(([lbl,k]) => `<div class="info-row"><strong>${lbl}:</strong> ${ext[k]}</div>`).join('');
+
     const eksikHtml = eks.length ? `<div class="eksik-list">⚠️ Eksik: ${eks.join(', ')}</div>` : '';
+
+    // AI önerisi — sekreter için bilgi amaçlı
+    const aiOneriCls  = aiOneri === 'KABUL' ? 'ai-oneri-kabul' : aiOneri === 'RED' ? 'ai-oneri-red' : '';
+    const aiOneriHtml = aiOneri !== '—'
+      ? `<div class="ai-oneri-badge ${aiOneriCls}">🤖 AI Öneri: ${aiOneri === 'KABUL' ? 'Uygun görünüyor' : 'Dikkat edilmesi gereken noktalar var'}</div>`
+      : '';
+
+    // AI Detay paneli
+    let aiDetayHtml = '';
+    if (aiD && (aiD.firma_analizi || aiD.tarih_analizi || aiD.oneriler?.length)) {
+      const risk = aiD.risk_skoru || 0;
+      const riskRenk = risk < 30 ? '#059669' : risk < 60 ? '#d97706' : '#dc2626';
+      aiDetayHtml = `
+        <div class="ai-detay-panel">
+          <div class="ai-detay-head">🧠 AI Değerlendirmesi</div>
+          <div class="ai-risk-bar">
+            <span>Risk:</span>
+            <div class="ai-risk-track"><div class="ai-risk-fill" style="width:${risk}%;background:${riskRenk}"></div></div>
+            <strong style="color:${riskRenk}">${risk}/100</strong>
+          </div>
+          ${aiD.firma_analizi  ? `<div class="ai-detay-row">🏢 <strong>Firma:</strong> ${aiD.firma_analizi}</div>` : ''}
+          ${aiD.tarih_analizi  ? `<div class="ai-detay-row">📅 <strong>Tarih:</strong> ${aiD.tarih_analizi}</div>` : ''}
+          ${aiD.ogrenci_yorumu ? `<div class="ai-detay-row">👤 <strong>Öğrenci:</strong> ${aiD.ogrenci_yorumu}</div>` : ''}
+          ${aiD.oneriler?.length ? `<div class="ai-detay-row">💡 <strong>Öneriler:</strong><ul>${aiD.oneriler.map(o=>`<li>${o}</li>`).join('')}</ul></div>` : ''}
+          ${aiD.dikkat?.length   ? `<div class="ai-detay-row ai-uyari">⚠️ <strong>Dikkat:</strong><ul>${aiD.dikkat.map(o=>`<li>${o}</li>`).join('')}</ul></div>` : ''}
+        </div>`;
+    }
+
     const raporHtml = r.ai_rapor
-      ? `<span class="rapor-toggle" onclick="toggleRapor(${r.id})">📄 AI Raporu</span><div id="rapor-${r.id}" class="rapor-text">${r.ai_rapor}</div>` : '';
+      ? `<span class="rapor-toggle" onclick="toggleRapor(${r.id})">📄 AI Ham Yanıtı</span><div id="rapor-${r.id}" class="rapor-text">${r.ai_rapor}</div>` : '';
+
+    // Aksiyon satırı: AI kararı finaldir, sekreter override edebilir
+    const karsiKarar = durum === 'onaylandi' ? 'RED' : 'KABUL';
+    const karsiLabel = durum === 'onaylandi' ? '❌ Reddet' : '✅ Onayla';
+    const aksiyonHtml = `
+      <div class="karar-verildi">
+        ${durum === 'onaylandi'
+          ? '<span style="color:#065f46;font-weight:700;">✅ AI tarafından onaylandı</span>'
+          : durum === 'reddedildi'
+          ? '<span style="color:#991b1b;font-weight:700;">❌ AI tarafından reddedildi</span>'
+          : '<span style="color:#92400e;font-weight:700;">⏳ İşleniyor…</span>'}
+        <button class="btn btn-outline btn-sm" onclick="manuelKarar(${r.id},'${karsiKarar}')">${karsiLabel} (Override)</button>
+      </div>`;
+
     return `
     <div class="basvuru-card ${cardCls}" id="card-${r.id}">
       <div class="basvuru-head" onclick="toggleCard(${r.id})">
         <div>
-          <div class="basvuru-title">${icon} #${r.id} — ${r.original_adi || '—'}</div>
-          <div class="basvuru-meta">${r.yukleme_tarihi||''} · ${ext.firma_adi||''}</div>
+          <div class="basvuru-title">${durumIcon} #${r.id} — ${ext.ad_soyad || r.original_adi || '—'}</div>
+          <div class="basvuru-meta">${r.yukleme_tarihi||''} · ${ext.firma_adi||''} ${ext.bolum ? '· '+ext.bolum : ''}</div>
         </div>
-        <span class="badge ${badgeCls}">${karar}</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap">
+          ${aiOneriHtml}
+          <span class="badge ${durumBadgeCls}">${durumLabel}</span>
+          <a href="/api/basvuru/pdf/${r.id}" target="_blank" class="btn btn-outline btn-sm pdf-goruntule-btn" onclick="event.stopPropagation()">📄 PDF</a>
+        </div>
       </div>
       <div class="basvuru-body" id="body-${r.id}">
-        <p style="font-size:.88rem;margin-bottom:12px;">${r.ai_mesaj||'—'}</p>
+        <p style="font-size:.88rem;margin-bottom:12px;color:var(--gray-600)">${r.ai_mesaj||'—'}</p>
         ${eksikHtml}
         <div class="basvuru-info">${infoHtml}</div>
+        ${aiDetayHtml}
         ${raporHtml}
-        <div class="basvuru-actions" style="margin-top:14px;">
-          <button class="btn btn-success btn-sm" onclick="manuelKarar(${r.id},'KABUL')">✅ Onayla</button>
-          <button class="btn btn-danger  btn-sm" onclick="manuelKarar(${r.id},'RED')">❌ Reddet</button>
-        </div>
+        ${aksiyonHtml}
       </div>
     </div>`;
   }).join('');
@@ -429,9 +527,12 @@ function filterBasvurular() {
   const q = (document.getElementById('sek-search')?.value || '').toLowerCase();
   let rows = _allRows;
   if (_activeFilter !== 'hepsi') {
-    rows = rows.filter(r =>
-      _activeFilter === 'beklemede' ? r.durum === 'beklemede' : r.ai_karar === _activeFilter
-    );
+    rows = rows.filter(r => {
+      if (_activeFilter === 'beklemede') return r.durum === 'beklemede';
+      if (_activeFilter === 'KABUL')     return r.durum === 'onaylandi';
+      if (_activeFilter === 'RED')       return r.durum === 'reddedildi';
+      return true;
+    });
   }
   if (q) {
     rows = rows.filter(r => {
@@ -483,6 +584,266 @@ function exportCSV() {
   a.download = `basvurular_${new Date().toISOString().slice(0,10)}.csv`;
   a.click(); URL.revokeObjectURL(url);
   showToast('✅ CSV indirildi!');
+}
+
+/* ── 🤖 AGENT ─────────────────────────────────────────────────────────────── */
+async function agentGonder(directKomut) {
+  const input  = document.getElementById('agent-input');
+  const result = document.getElementById('agent-result');
+  const komut  = directKomut || (input?.value.trim()) || '';
+  if (!komut) return;
+
+  result.style.display = 'block';
+  result.innerHTML =
+    `<div class="agent-msg agent-msg-user">👤 ${komut}</div>` +
+    `<div class="agent-msg agent-msg-bot agent-loading">⏳ Agent düşünüyor…</div>`;
+
+  try {
+    const res  = await fetch('/api/agent/komut', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ komut }),
+    });
+    const data = await res.json();
+    const loadEl = result.querySelector('.agent-loading');
+    if (loadEl) loadEl.remove();
+
+    const toolBadge = data.tool
+      ? `<span class="agent-tool-badge">🔧 ${data.tool}</span>` : '';
+    result.insertAdjacentHTML('beforeend',
+      `<div class="agent-msg agent-msg-bot">${toolBadge}${mdToHtml(data.yanit || '—')}</div>`);
+
+    // İşlem yapıldıysa listeyi yenile
+    if (['ONAYLA','REDDET'].includes(data.tool)) {
+      loadBasvurular();
+      showToast('✅ İşlem yapıldı!');
+    }
+    if (input) input.value = '';
+  } catch (e) {
+    const loadEl = result.querySelector('.agent-loading');
+    if (loadEl) loadEl.innerHTML = '❌ Hata: ' + e.message;
+  }
+  result.scrollTop = result.scrollHeight;
+}
+
+function agentHizli(komut) {
+  const input = document.getElementById('agent-input');
+  if (input) input.value = komut;
+  agentGonder(komut);
+}
+
+function agentSoru() {
+  const row = document.getElementById('agent-soru-row');
+  if (!row) return;
+  const visible = row.style.display !== 'none';
+  row.style.display = visible ? 'none' : 'flex';
+  if (!visible) document.getElementById('agent-input')?.focus();
+}
+
+/* ── AI ÖZET ──────────────────────────────────────────────────────────────── */
+async function aiOzet() {
+  const card = document.getElementById('ai-ozet-card');
+  const body = document.getElementById('ai-ozet-body');
+  card.style.display = 'block';
+  body.innerHTML = '<div style="padding:20px;text-align:center;color:#64748b;">⏳ AI özet hazırlanıyor… (bu 30 saniye sürebilir)</div>';
+  try {
+    const res  = await fetch('/api/ai-ozet');
+    const data = await res.json();
+    body.innerHTML = mdToHtml(data.ozet || '—');
+  } catch (e) {
+    body.innerHTML = `<div style="color:#dc2626;padding:14px;">❌ ${e.message}</div>`;
+  }
+}
+
+/* ── SEKRETER SEKMELERİ ───────────────────────────────────────────────────── */
+function sekmeAc(btn, sekme) {
+  document.querySelectorAll('.sek-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-basvurular').style.display = sekme === 'basvurular' ? 'flex' : 'none';
+  document.getElementById('tab-raporlar').style.display   = sekme === 'raporlar'   ? 'flex' : 'none';
+  if (sekme === 'raporlar') loadRaporlar();
+}
+
+/* ── BİLDİRİMLER ──────────────────────────────────────────────────────────── */
+let _bildirimAcik = false;
+
+async function loadBildirimSayisi() {
+  try {
+    const res  = await fetch('/api/bildirimler/sayi');
+    const data = await res.json();
+    const badge = document.getElementById('notif-badge');
+    if (!badge) return;
+    if (data.sayi > 0) {
+      badge.textContent = data.sayi > 99 ? '99+' : data.sayi;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch { /* sessiz */ }
+}
+
+async function toggleBildirimler() {
+  const dd = document.getElementById('notif-dropdown');
+  _bildirimAcik = !_bildirimAcik;
+  dd.style.display = _bildirimAcik ? 'block' : 'none';
+  if (_bildirimAcik) await loadBildirimler();
+}
+
+async function loadBildirimler() {
+  const list = document.getElementById('notif-list');
+  try {
+    const res  = await fetch('/api/bildirimler');
+    const rows = await res.json();
+    if (!rows.length) { list.innerHTML = '<div class="notif-empty">Bildirim yok</div>'; return; }
+    list.innerHTML = rows.map(r => `
+      <div class="notif-item ${r.okundu ? 'okundu' : 'yeni'}" onclick="bildirimTikla(${r.id},${r.link_id||0},'${r.tip}')">
+        <span class="notif-icon">${r.tip === 'rapor' ? '📝' : '📋'}</span>
+        <div class="notif-body">
+          <div class="notif-mesaj">${r.mesaj}</div>
+          <div class="notif-tarih">${r.tarih}</div>
+        </div>
+        ${!r.okundu ? '<span class="notif-dot"></span>' : ''}
+      </div>`).join('');
+  } catch { list.innerHTML = '<div class="notif-empty">Yüklenemedi</div>'; }
+}
+
+async function bildirimTikla(id, linkId, tip) {
+  await fetch('/api/bildirimler/okundu', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  });
+  loadBildirimSayisi();
+  loadBildirimler();
+  if (tip === 'rapor') { sekmeAc(document.querySelectorAll('.sek-tab')[1], 'raporlar'); }
+  else                 { loadBasvurular(); }
+  _bildirimAcik = false;
+  document.getElementById('notif-dropdown').style.display = 'none';
+}
+
+async function tumunuOku(e) {
+  e.stopPropagation();
+  await fetch('/api/bildirimler/okundu', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  loadBildirimSayisi();
+  loadBildirimler();
+}
+
+// Sekreter ise periyodik kontrol
+if (document.getElementById('notif-badge')) {
+  loadBildirimSayisi();
+  setInterval(loadBildirimSayisi, 30000);
+}
+
+// Dropdown dışına tıklanınca kapat
+document.addEventListener('click', e => {
+  const wrap = document.querySelector('.notif-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('notif-dropdown').style.display = 'none';
+    _bildirimAcik = false;
+  }
+});
+
+/* ── RAPOR YÜKLEME (öğrenci) ─────────────────────────────────────────────── */
+const raporFile = document.getElementById('rapor-file');
+if (raporFile) {
+  raporFile.addEventListener('change', () => {
+    const f = raporFile.files[0];
+    document.getElementById('rapor-file-name').textContent = f ? f.name : 'Dosya seçilmedi';
+    document.getElementById('btn-rapor-yukle').disabled = !f;
+  });
+}
+
+async function raporYukle() {
+  const file  = document.getElementById('rapor-file')?.files[0];
+  const subId = document.getElementById('rapor-sub-id')?.value;
+  const result = document.getElementById('rapor-result');
+  if (!file || !subId) { showToast('⚠️ Başvuru ID ve rapor dosyası seçin.'); return; }
+  const btn = document.getElementById('btn-rapor-yukle');
+  btn.disabled = true; btn.innerHTML = '<span class="spin">⏳</span> Yükleniyor…';
+  const fd = new FormData();
+  fd.append('rapor', file);
+  fd.append('submission_id', subId);
+  try {
+    const res  = await fetch('/api/rapor/yukle', { method: 'POST', body: fd });
+    const data = await res.json();
+    result.style.display = 'block';
+    result.style.cssText = 'display:block;padding:8px 12px;border-radius:8px;font-size:.85rem;' +
+      (data.ok ? 'background:#d1fae5;color:#065f46;' : 'background:#fee2e2;color:#991b1b;');
+    result.textContent = data.ok ? '✅ Rapor başarıyla yüklendi!' : '❌ ' + (data.hata || 'Hata');
+    if (data.ok) showToast('✅ Staj raporu gönderildi!');
+  } catch (e) {
+    result.style.display = 'block';
+    result.textContent = '❌ Bağlantı hatası';
+  } finally {
+    btn.disabled = false; btn.innerHTML = '<span>📤</span> Yükle';
+  }
+}
+
+/* ── RAPOR LİSTESİ (sekreter) ────────────────────────────────────────────── */
+async function loadRaporlar() {
+  const list = document.getElementById('tab-raporlar');
+  list.innerHTML = '<div class="empty-state">⏳ Yükleniyor…</div>';
+  try {
+    const res  = await fetch('/api/rapor/liste');
+    const rows = await res.json();
+    if (!rows.length) { list.innerHTML = '<div class="empty-state">📭 Rapor yok.</div>'; return; }
+    const durumRenk = { beklemede:'#fef3c7', incelendi:'#d1fae5', reddedildi:'#fee2e2' };
+    list.innerHTML = rows.map(r => {
+      let analiz = null;
+      try { analiz = r.ai_analiz ? JSON.parse(r.ai_analiz) : null; } catch {}
+      const skor = r.ai_skor || 0;
+      const skorRenk = skor >= 7 ? '#059669' : skor >= 4 ? '#d97706' : '#dc2626';
+      const aiBadge = analiz
+        ? `<span class="ai-badge" style="background:${skorRenk}20;color:${skorRenk}">🧠 AI: ${skor}/10</span>`
+        : `<span class="ai-badge" style="background:#fef3c7;color:#92400e">⏳ AI bekliyor</span>`;
+      const analizHtml = analiz ? `
+        <div class="ai-detay-panel" style="margin-top:10px">
+          <div class="ai-detay-head">🧠 AI Rapor Analizi <span style="float:right;color:${skorRenk}">Kalite: ${skor}/10</span></div>
+          ${analiz.ozet ? `<div class="ai-detay-row">📝 <strong>Özet:</strong> ${analiz.ozet}</div>` : ''}
+          ${analiz.guclu_yonler?.length ? `<div class="ai-detay-row">✅ <strong>Güçlü:</strong><ul>${analiz.guclu_yonler.map(x=>`<li>${x}</li>`).join('')}</ul></div>` : ''}
+          ${analiz.eksikler?.length ? `<div class="ai-detay-row ai-uyari">⚠️ <strong>Eksik:</strong><ul>${analiz.eksikler.map(x=>`<li>${x}</li>`).join('')}</ul></div>` : ''}
+          ${analiz.oneriler?.length ? `<div class="ai-detay-row">💡 <strong>Öneri:</strong><ul>${analiz.oneriler.map(x=>`<li>${x}</li>`).join('')}</ul></div>` : ''}
+        </div>` : '';
+      return `
+      <div class="basvuru-card" style="border-left:4px solid #4f46e5;padding:14px 18px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <div>
+            <strong>📝 Başvuru #${r.submission_id}</strong> — ${r.dosya_adi} ${aiBadge}
+            <div style="font-size:.78rem;color:var(--gray-400);margin-top:2px;">${r.yukleme_tarihi}</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <span style="background:${durumRenk[r.durum]||'#f1f5f9'};padding:3px 10px;border-radius:20px;font-size:.8rem;font-weight:600;">${r.durum}</span>
+            <a href="/api/rapor/indir/${r.id}" class="btn btn-outline btn-sm">⬇️ İndir</a>
+            <button class="btn btn-primary btn-sm" onclick="aiAnaliz(${r.id})">🧠 AI Analiz</button>
+            <button class="btn btn-success btn-sm" onclick="raporKarar(${r.id},'incelendi')">✅ İncelendi</button>
+            <button class="btn btn-danger  btn-sm" onclick="raporKarar(${r.id},'reddedildi')">❌ Reddet</button>
+          </div>
+        </div>
+        ${r.sekreter_notu ? `<div style="margin-top:8px;font-size:.83rem;color:var(--gray-600);">Not: ${r.sekreter_notu}</div>` : ''}
+        ${analizHtml}
+      </div>`;
+    }).join('');
+  } catch (e) { list.innerHTML = `<div class="empty-state">❌ ${e.message}</div>`; }
+}
+
+async function aiAnaliz(id) {
+  showToast('🧠 AI rapor analizi başladı… (30-60 sn)');
+  try {
+    const res  = await fetch(`/api/rapor/analiz/${id}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) { showToast('✅ AI analiz tamamlandı!'); loadRaporlar(); }
+    else         { showToast('❌ ' + (data.hata || 'Hata')); }
+  } catch (e) { showToast('❌ ' + e.message); }
+}
+
+async function raporKarar(id, durum) {
+  await fetch('/api/rapor/karar', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, durum }),
+  });
+  showToast(durum === 'incelendi' ? '✅ Rapor incelendi.' : '❌ Rapor reddedildi.');
+  loadRaporlar();
 }
 
 /* ── TOAST ────────────────────────────────────────────────────────────────── */

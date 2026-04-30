@@ -22,6 +22,19 @@
       <span class="role-badge">
         {% if role == "sekreter" %}🗂️ Sekreter{% else %}👨‍🎓 Öğrenci{% endif %}
       </span>
+      {% if role == "sekreter" %}
+      <div class="notif-wrap" onclick="toggleBildirimler()">
+        <button class="notif-btn" title="Bildirimler">🔔</button>
+        <span class="notif-badge" id="notif-badge" style="display:none">0</span>
+        <div class="notif-dropdown" id="notif-dropdown" style="display:none">
+          <div class="notif-header">
+            <span>Bildirimler</span>
+            <button onclick="tumunuOku(event)" class="notif-read-all">Tümünü okundu işaretle</button>
+          </div>
+          <div id="notif-list" class="notif-list">Yükleniyor…</div>
+        </div>
+      </div>
+      {% endif %}
       <a href="/logout" class="btn btn-outline btn-sm">Çıkış</a>
     </div>
   </div>
@@ -144,6 +157,28 @@
         </div>
         <div id="yukle-result" class="yukle-result" style="display:none"></div>
       </div>
+
+      <!-- STAJ RAPORU YÜKLEME -->
+      <div class="card mt">
+        <div class="card-head">📝 Staj Raporu Yükle</div>
+        <div class="pdf-actions" style="flex-direction:column;gap:10px;align-items:flex-start;padding:16px 18px;">
+          <p style="font-size:.85rem;color:var(--gray-600);">Stajınız tamamlandıktan sonra staj defteri / raporunuzu buradan yükleyin.</p>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <label style="font-size:.82rem;font-weight:600;color:var(--gray-600);">Başvuru ID:</label>
+            <input type="number" id="rapor-sub-id" placeholder="Örn: 5" min="1"
+                   style="width:90px;padding:7px 10px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:.85rem;">
+            <input type="file" id="rapor-file" accept=".pdf" hidden>
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('rapor-file').click()">
+              <span>📂</span> Rapor Seç
+            </button>
+            <span id="rapor-file-name" class="file-name">Dosya seçilmedi</span>
+            <button id="btn-rapor-yukle" class="btn btn-primary btn-sm" onclick="raporYukle()" disabled>
+              <span>📤</span> Yükle
+            </button>
+          </div>
+          <div id="rapor-result" style="display:none;margin-top:4px;"></div>
+        </div>
+      </div>
     </main>
 
     <!-- SAĞ: CHAT -->
@@ -186,6 +221,7 @@
         </div>
       </div>
       <div class="sek-topbar-right">
+        <button class="btn btn-outline btn-sm" onclick="aiOzet()">🧠 AI Günlük Özet</button>
         <button class="btn btn-outline btn-sm" onclick="exportCSV()">📥 CSV İndir</button>
         <button class="btn btn-primary btn-sm" onclick="loadBasvurular()">🔄 Yenile</button>
       </div>
@@ -282,9 +318,73 @@
       </div>
     </div>
 
+    <!-- 🤖 AKILLI ASISTAN -->
+    <div class="agent-panel">
+      <div class="agent-panel-head">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="font-size:1.6rem;">🤖</span>
+          <div>
+            <div class="agent-panel-title">Akıllı Asistan</div>
+            <div class="agent-panel-sub">Başvurularınızı otomatik analiz eder ve yönetir</div>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="agentHizli('Bekleyen başvuruları önceliğe göre sırala, risk durumunu değerlendir ve kısa özet ver')">▶ Otomatik Analiz</button>
+      </div>
+      <div class="agent-actions">
+<button class="agent-action-btn" onclick="agentHizli('Toplam, kabul, red ve bekleyen sayıları ile oranları içeren durum özetini ver')">
+          <span class="agent-action-icon">📊</span>
+          <div>
+            <div class="agent-action-title">Durum Özeti</div>
+            <div class="agent-action-sub">Güncel istatistikler</div>
+          </div>
+        </button>
+        <button class="agent-action-btn" onclick="agentHizli('En çok başvuru gelen firmaları ve bölüm dağılımını listele')">
+          <span class="agent-action-icon">🏢</span>
+          <div>
+            <div class="agent-action-title">Firma & Bölüm</div>
+            <div class="agent-action-sub">Başvuru dağılımını gör</div>
+          </div>
+        </button>
+        <button class="agent-action-btn" onclick="agentSoru()">
+          <span class="agent-action-icon">💬</span>
+          <div>
+            <div class="agent-action-title">Soru Sor</div>
+            <div class="agent-action-sub">Asistana bir şey sor</div>
+          </div>
+        </button>
+      </div>
+      <div id="agent-soru-row" class="agent-soru-row" style="display:none">
+        <input id="agent-input" type="text" class="agent-soru-input"
+               placeholder="Örn: 5 numaralı başvuruyu onayla — Bilgisayar bölümünden kaç başvuru var?"
+               onkeydown="if(event.key==='Enter')agentGonder()">
+        <button class="btn btn-primary btn-sm" onclick="agentGonder()">Sor ➤</button>
+      </div>
+      <div id="agent-result" class="agent-result" style="display:none"></div>
+    </div>
+
+    <!-- AI ÖZET PANELİ -->
+    <div id="ai-ozet-card" class="ai-ozet-card" style="display:none">
+      <div class="ai-ozet-head">
+        <span>🧠 AI Günlük Özet</span>
+        <button onclick="document.getElementById('ai-ozet-card').style.display='none'" class="ai-close">✕</button>
+      </div>
+      <div id="ai-ozet-body" class="ai-ozet-body"></div>
+    </div>
+
+    <!-- SEKMELER -->
+    <div class="sek-tabs">
+      <button class="sek-tab active" onclick="sekmeAc(this,'basvurular')">📋 Başvurular</button>
+      <button class="sek-tab" onclick="sekmeAc(this,'raporlar')">📝 Staj Raporları</button>
+    </div>
+
     <!-- BAŞVURU LİSTESİ -->
-    <div id="basvuru-list" class="sek-list">
+    <div id="tab-basvurular" class="sek-list">
       <div class="empty-state">Yükleniyor…</div>
+    </div>
+
+    <!-- RAPOR LİSTESİ -->
+    <div id="tab-raporlar" class="sek-list" style="display:none">
+      <div class="empty-state">⏳ Yükleniyor…</div>
     </div>
 
   </div>
@@ -294,5 +394,6 @@
 <div id="toast" class="toast"></div>
 
 <script src="/static/app.js"></script>
+
 </body>
 </html>
