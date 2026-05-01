@@ -1,7 +1,7 @@
 """
 app.py  —  Amasya MYO Staj Asistanı (Flask)
 """
-from __future__ import annotations
+from __future__ import annotations # selam
 
 import json
 import os
@@ -224,6 +224,7 @@ def _llm_extract_form(pdf_text: str) -> dict:
 
 
 def get_kurallar():
+    """Geriye dönük uyumluluk için ham parça döndürür."""
     _, rag = load_services()
     queries = [
         "staj süresi minimum gün",
@@ -238,6 +239,72 @@ def get_kurallar():
                 seen.add(hit.chunk_text)
                 chunks.append(hit.chunk_text[:260])
     return chunks
+
+
+# Yapılandırılmış kural cache'i — LLM ile üretilir, in-memory tutulur
+_KURALLAR_CACHE = {"data": None, "ts": 0}
+
+def get_kurallar_yapilandirilmis():
+    """Yönerge + sistem tarihlerine dayalı, kategorize teknik kural maddeleri.
+    Anında döner (LLM bağımlılığı yok) — sistem tarihleri değişince otomatik güncellenir."""
+    import time as _time
+    global _KURALLAR_CACHE
+
+    # Aktif dönem tarihleri
+    yaz_b   = get_setting("yaz_staj_baslangic")
+    yaz_s   = get_setting("yaz_staj_bitis")
+    yaz_son = get_setting("yaz_basvuru_son_gun")
+    yaz_min = get_setting("yaz_min_staj_gun") or "20"
+    ara_b   = get_setting("ara_staj_baslangic")
+    ara_s   = get_setting("ara_staj_bitis")
+    ara_son = get_setting("ara_basvuru_son_gun")
+    ara_min = get_setting("ara_min_staj_gun") or "20"
+
+    # Cache anahtarı: tarihler değiştiyse cache geçersiz
+    cache_key = f"{yaz_b}{yaz_s}{yaz_son}{yaz_min}{ara_b}{ara_s}{ara_son}{ara_min}"
+    if _KURALLAR_CACHE.get("key") == cache_key and _KURALLAR_CACHE.get("data"):
+        return _KURALLAR_CACHE["data"]
+
+    def _tr_tarih(iso):
+        """2026-06-22 → 22.06.2026"""
+        if not iso or len(iso) < 10: return iso or "—"
+        try:
+            return f"{iso[8:10]}.{iso[5:7]}.{iso[0:4]}"
+        except Exception:
+            return iso
+
+    kategoriler = [
+        {"baslik": "Staj Süresi", "ikon": "⏱️", "maddeler": [
+            f"Yaz dönemi penceresi: {_tr_tarih(yaz_b)} – {_tr_tarih(yaz_s)}",
+            f"Ara dönem penceresi: {_tr_tarih(ara_b)} – {_tr_tarih(ara_s)}",
+            f"Minimum staj: {yaz_min} iş günü",
+            "Haftalık 5–6 iş günü çalışılmalı",
+        ]},
+        {"baslik": "Başvuru Süreci", "ikon": "📝", "maddeler": [
+            f"Yaz son başvuru: {_tr_tarih(yaz_son)}",
+            f"Ara son başvuru: {_tr_tarih(ara_son)}",
+            "Form eksiksiz ve okunaklı doldurulmalı",
+            "PDF formu sekretere iletilir",
+        ]},
+        {"baslik": "Zorunlu Bilgiler", "ikon": "📑", "maddeler": [
+            "Ad-Soyad, TC Kimlik No, Öğrenci No",
+            "Bölüm/Program ve iletişim",
+            "Firma adı, adresi, telefonu",
+            "Başlangıç ve bitiş tarihleri",
+        ]},
+        {"baslik": "Devam ve Disiplin", "ikon": "⚠️", "maddeler": [
+            "Devamsızlık staj kabulünü etkiler",
+            "Staj defteri düzenli tutulmalı",
+            "Mazeretsiz devamsızlık → iptal",
+        ]},
+        {"baslik": "Karar Süreci", "ikon": "✅", "maddeler": [
+            "Uygun başvurular AI ile onaylanır",
+            "Eksik/hatalı başvurular reddedilir",
+            "Sonuç anında öğrenciye bildirilir",
+        ]},
+    ]
+    _KURALLAR_CACHE = {"data": kategoriler, "key": cache_key, "ts": _time.time()}
+    return kategoriler
 
 def agent_analiz(form_data: dict, pdf_text: str = "") -> dict:
     """Hızlı karar: sadece KABUL/RED + mesaj döndürür (30s timeout)."""
@@ -384,9 +451,10 @@ def index():
 @app.route("/api/kurallar")
 def api_kurallar():
     try:
-        return jsonify({"ok": True, "kurallar": get_kurallar()})
+        kategoriler = get_kurallar_yapilandirilmis()
+        return jsonify({"ok": True, "kategoriler": kategoriler})
     except Exception as e:
-        return jsonify({"ok": False, "kurallar": [], "hata": str(e)})
+        return jsonify({"ok": False, "kategoriler": [], "hata": str(e)})
 
 @app.route("/api/validate", methods=["POST"])
 def api_validate():
@@ -601,8 +669,9 @@ def api_chat():
         return jsonify({"yanit": "Soru boş."})
 
     ol, rag = load_services()
-    hits    = rag.search(soru, top_k=5)
-    context = "\n\n".join(h.chunk_text for h in hits) if hits else ""
+    # Yönergeden ilgili bölümleri RAG ile çek
+    hits    = rag.search(soru, top_k=4)
+    context = "\n\n".join(f"[Yönerge] {h.chunk_text[:700]}" for h in hits) if hits else ""
 
     # Staj dönemi bilgisini sisteme ekle
     donem_keys = [
@@ -610,80 +679,126 @@ def api_chat():
         "ara_donem_adi","ara_staj_baslangic","ara_staj_bitis","ara_basvuru_son_gun","ara_min_staj_gun",
     ]
     d = {k: get_setting(k) for k in donem_keys}
+
+    # Yaz dönemi gün hesabı (yaz tatili = staj penceresinin tüm günleri)
+    def _gun_say(b, s):
+        try:
+            from datetime import date as _date
+            ba = _date.fromisoformat(b); so = _date.fromisoformat(s)
+            return (so - ba).days + 1
+        except Exception:
+            return None
+    yaz_pencere_gun = _gun_say(d.get('yaz_staj_baslangic',''), d.get('yaz_staj_bitis',''))
+    ara_pencere_gun = _gun_say(d.get('ara_staj_baslangic',''), d.get('ara_staj_bitis',''))
+
     donem_bilgi = (
-        f"Aktif Staj Dönemleri:\n"
-        f"- {d.get('yaz_donem_adi','Yaz')}: {d.get('yaz_staj_baslangic','')} – {d.get('yaz_staj_bitis','')} "
-        f"(Son başvuru: {d.get('yaz_basvuru_son_gun','')}, Min: {d.get('yaz_min_staj_gun','20')} gün)\n"
-        f"- {d.get('ara_donem_adi','Ara')}: {d.get('ara_staj_baslangic','')} – {d.get('ara_staj_bitis','')} "
-        f"(Son başvuru: {d.get('ara_basvuru_son_gun','')}, Min: {d.get('ara_min_staj_gun','20')} gün)"
+        f"AKTİF STAJ DÖNEMLERİ (sistemde tanımlı resmi tarihler):\n"
+        f"☀️ {d.get('yaz_donem_adi','Yaz Dönemi')}\n"
+        f"   Staj penceresi: {d.get('yaz_staj_baslangic','')} → {d.get('yaz_staj_bitis','')}"
+        f"{f' ({yaz_pencere_gun} takvim günü)' if yaz_pencere_gun else ''}\n"
+        f"   Başvuru son tarihi: {d.get('yaz_basvuru_son_gun','')}\n"
+        f"   Minimum staj gün sayısı: {d.get('yaz_min_staj_gun','20')} iş günü\n\n"
+        f"❄️ {d.get('ara_donem_adi','Ara Dönem')} (Bahar/yarıyıl tatili)\n"
+        f"   Staj penceresi: {d.get('ara_staj_baslangic','')} → {d.get('ara_staj_bitis','')}"
+        f"{f' ({ara_pencere_gun} takvim günü)' if ara_pencere_gun else ''}\n"
+        f"   Başvuru son tarihi: {d.get('ara_basvuru_son_gun','')}\n"
+        f"   Minimum staj gün sayısı: {d.get('ara_min_staj_gun','20')} iş günü"
     )
 
     sistem = (
-        "Sen Amasya MYO Staj Başvuru Asistanısın. "
-        "Öğrencilerin staj süreci hakkındaki sorularını Türkçe, kısa ve net biçimde yanıtlarsın. "
-        "Yönerge bilgisi ve dönem bilgisi verildiğinde bunları kullan. "
-        "Bilmediğin bir şeyi kesinlikle uydurama. Madde numaralarını doğru ver.\n\n"
+        "Sen Amasya MYO Staj Başvuru Asistanısın. Öğrencilerin staj süreci hakkındaki sorularını "
+        "Türkçe, kısa ve net biçimde yanıtlarsın.\n\n"
+        "ÖNEMLİ KURALLAR:\n"
+        "1) Cevaplarını her zaman önce verilen YÖNERGE bölümlerine ve aktif STAJ DÖNEMİ bilgilerine dayandır.\n"
+        "2) Tarih/staj süresi/dönem soruları → mutlaka aşağıdaki STAJ DÖNEMİ bilgisini kullan, başka tarih uydurma.\n"
+        "3) Yönergede yoksa ya da bilmiyorsan 'Yönergede bu konuda kesin bilgi bulamadım' de — uydurma!\n"
+        "4) Mümkünse yanıtlarken yönergedeki madde numarasını ya da bölümünü belirt.\n"
+        "5) 'Yaz dönemi' (yaz tatili) ve 'Ara dönem' (bahar/yarıyıl tatili) ayırımına dikkat — kullanıcı hangisini sorduysa o döneme göre cevap ver.\n\n"
         f"{donem_bilgi}"
     )
 
-    # Konuşma geçmişini hazırla (son 6 tur)
+    # Konuşma geçmişini hazırla (son 4 tur)
     messages = [{"role": "system", "content": sistem}]
-    for m in gecmis[-6:]:
+    for m in gecmis[-4:]:
         if m.get("role") in ("user", "assistant") and m.get("content"):
-            messages.append({"role": m["role"], "content": m["content"]})
+            content = m["content"][:600]
+            messages.append({"role": m["role"], "content": content})
 
     # RAG context'i son kullanıcı mesajına ekle
     if context:
-        user_content = f"İlgili yönerge bölümleri:\n{context}\n\nSoru: {soru}"
+        user_content = (
+            f"=== YÖNERGEDEN İLGİLİ BÖLÜMLER ===\n{context}\n\n"
+            f"=== KULLANICI SORUSU ===\n{soru}\n\n"
+            f"Yukarıdaki yönerge bölümlerini ve sistem mesajındaki staj dönem tarihlerini kullanarak yanıtla."
+        )
     else:
         user_content = soru
     messages.append({"role": "user", "content": user_content})
 
+    chat_basarili = False
     try:
         model = ol.available_model(aktif_model())
-        yanit = ol.chat(model=model, messages=messages, timeout=90,
+        yanit = ol.chat(model=model, messages=messages, timeout=120,
                         options={"temperature": 0.3})
+        chat_basarili = True
     except Exception as e:
-        yanit = f"Ollama hatası: {e}"
+        # Çift "Ollama hatası:" prefix'ini önle
+        msg = str(e)
+        if msg.lower().startswith("ollama"):
+            yanit = msg
+        else:
+            yanit = f"Ollama hatası: {msg}"
 
-    # Mesajda form alanı bilgisi varsa çıkar
+    # Mesajda form alanı bilgisi VARSA çıkar — soru cümleleri için yapma
     form_data = {}
-    FORM_KEYWORDS = [
-        'tarih','haziran','temmuz','ağustos','eylül','ekim','kasım','aralık',
-        'ocak','şubat','mart','nisan','mayıs','arası','arasında','başlıyorum',
-        'yapacağım','staj yapıcam','firma','şirketi','bölüm','program','adres',
-        'gün','hafta','tc','kimlik','öğrenci no','numara','ad soyad','adım',
+    soru_lc = soru.lower()
+
+    import re as _re
+
+    # Soru göstergeleri varsa extraction yapma
+    SORU_KELIME = [
+        '?', 'ne kadar', 'nasıl', 'kaç gün', 'kaç saat', 'kaç hafta',
+        'ne zaman', 'hangi', 'kim', 'nedir', 'midir', 'mıdır', 'mıyım',
+        'olur mu', 'gerekli mi', 'yapılır mı', 'yapılır', 'yapılabilir',
+        'lazım mı', 'şart mı', 'açıklar mısın', 'anlatır mısın',
     ]
-    if any(k in soru.lower() for k in FORM_KEYWORDS):
+    is_soru = any(k in soru_lc for k in SORU_KELIME)
+
+    # Açık veri sinyali (gerçek bir tarih, sayı, vs.) var mı?
+    AY_ADLARI = r'(ocak|şubat|mart|nisan|mayıs|haziran|temmuz|ağustos|eylül|ekim|kasım|aralık)'
+    has_date_pattern = bool(
+        _re.search(r'\d{1,2}[/.\-]\d{1,2}', soru)               # 15/06, 15.06
+        or _re.search(r'\d{4}-\d{2}-\d{2}', soru)                # 2026-06-22
+        or _re.search(rf'\d{{1,2}}\s+{AY_ADLARI}', soru_lc)      # 15 Haziran
+        or _re.search(rf'{AY_ADLARI}\s+\d{{1,2}}', soru_lc)      # Haziran 15
+    )
+    has_long_number = bool(_re.search(r'\b\d{6,}\b', soru))      # öğrenci/TC no
+    has_data = has_date_pattern or has_long_number
+
+    # Extraction sadece: chat başarılı + soru değil + gerçek veri sinyali var
+    if chat_basarili and not is_soru and has_data:
         try:
-            import re as _re
-            bugun = datetime.now().strftime("%Y-%m-%d")
-            yil   = datetime.now().year
-            # Hem kullanıcı mesajı hem asistanın özeti kullanılarak daha doğru çıkarım
+            yil = datetime.now().year
             extract_prompt = (
-                f"Aşağıdaki Türkçe metinden staj başvuru formu alanlarını çıkar. "
-                f"SADECE geçerli JSON döndür, başka hiçbir şey yazma. Bulamazsan {{}} döndür.\n\n"
-                f"Bugün: {bugun}  (yıl belirtilmemişse {yil} kullan)\n\n"
-                f"=== KULLANICI MESAJI ===\n{soru}\n\n"
-                f"=== ASİSTAN ÖZETİ ===\n{yanit[:500]}\n\n"
-                f"=== ÖNEMLİ KURALLAR ===\n"
-                f"firma_adi   → Şirketin/firmanın SADECE İSMİ (ör: 'Metropolitcard', 'ABC A.Ş.'). Adres yazmak YASAK!\n"
-                f"firma_adresi → Şirketin ADRES ya da KONUMU (ör: 'Üsküdar', 'Kadıköy/İstanbul'). İsim yazmak YASAK!\n"
-                f"baslangic_tarihi / bitis_tarihi → YYYY-MM-DD formatında (ör: '{yil}-06-22')\n"
-                f"ad_soyad → Öğrencinin adı ve soyadı\n"
-                f"ogrenci_no → Öğrenci numarası (sadece rakamlar)\n"
-                f"tc_kimlik_no → 11 haneli TC kimlik numarası\n"
-                f"staj_gun_sayisi → Sadece rakam (ör: 30)\n"
-                f"bolum → Öğrencinin bölümü/programı\n"
-                f"hizmet_alani → Staj yapılacak sektör/alan\n\n"
-                f"Sadece bulunan alanları JSON'a ekle:\n"
-                f"JSON:"
+                f"Aşağıdaki Türkçe mesajda EXPLICITLY yazılan staj formu alanlarını çıkar.\n"
+                f"KURALLAR:\n"
+                f"1) SADECE metinde YAZILMIŞ olan değerleri al, tahmin etme, hesaplama yapma.\n"
+                f"2) Bulunmayan alanı JSON'a EKLEME (boş bile bırakma).\n"
+                f"3) Tarih SADECE açıkça belirtilmişse (ör: '15 Haziran', '2026-06-22'). YOKSA EKLEME.\n"
+                f"4) firma_adi = ŞİRKET ADI, firma_adresi = KONUM. Karıştırma!\n"
+                f"5) Yıl yoksa {yil} varsay.\n\n"
+                f"Mesaj: {soru}\n\n"
+                f"Çıkarılabilecek alanlar:\n"
+                f"baslangic_tarihi, bitis_tarihi (YYYY-MM-DD), staj_gun_sayisi,\n"
+                f"firma_adi, firma_adresi, hizmet_alani, bolum,\n"
+                f"ad_soyad, ogrenci_no, tc_kimlik_no\n\n"
+                f"SADECE JSON döndür. Bulamazsan {{}}:\n"
             )
             raw_ext = ol.chat(
                 model=model,
                 messages=[{"role": "user", "content": extract_prompt}],
-                timeout=25,
-                options={"temperature": 0.05},
+                timeout=20,
+                options={"temperature": 0.0},
             )
             m = _re.search(r'\{.*?\}', raw_ext, _re.DOTALL)
             if m:
@@ -693,11 +808,20 @@ def api_chat():
                     'firma_adi','firma_adresi','hizmet_alani','bolum',
                     'ad_soyad','ogrenci_no','tc_kimlik_no',
                 }
-                form_data = {
-                    k: str(v).strip()
-                    for k, v in parsed.items()
-                    if k in VALID_KEYS and v and str(v).strip() not in ('', 'null', 'None', '0')
-                }
+                # Tarih döndürüldüyse mesajda da tarih sinyali olmalı
+                bugun_iso = datetime.now().strftime("%Y-%m-%d")
+                form_data = {}
+                for k, v in parsed.items():
+                    if k not in VALID_KEYS: continue
+                    val = str(v).strip()
+                    if not val or val in ('', 'null', 'None', '0', 'false'):
+                        continue
+                    # Tarih hallüsinasyon kontrolü: bugünün tarihi ve mesajda tarih yoksa atla
+                    if 'tarih' in k and not has_date_pattern:
+                        continue
+                    if 'tarih' in k and val == bugun_iso and bugun_iso not in soru:
+                        continue
+                    form_data[k] = val
         except Exception:
             form_data = {}
 
@@ -939,50 +1063,96 @@ def api_rapor_analiz(rid):
 @app.route("/api/ai-ozet", methods=["GET"])
 @sekreter_required
 def api_ai_ozet():
-    """Sekreter için tüm bekleyen başvuruların AI özeti."""
-    rows = get_db().execute(
-        "SELECT * FROM submissions ORDER BY id DESC LIMIT 20"
-    ).fetchall()
-    if not rows:
-        return jsonify({"ozet": "Henüz başvuru yok."})
+    """Sekreter için günlük özet — Python ile hesaplanır, LLM sadece kısa yorum."""
+    # Sadece PDF'i olan başvurular
+    rows = _filtrele_pdf_var(get_db().execute(
+        "SELECT * FROM submissions ORDER BY id DESC"
+    ).fetchall())
 
-    items = []
+    if not rows:
+        return jsonify({"ozet": "📭 Henüz başvuru yok."})
+
+    # 1) Python ile istatistikleri hesapla (anında)
+    toplam = len(rows)
+    onayli = sum(1 for r in rows if r["durum"] == "onaylandi")
+    reddi  = sum(1 for r in rows if r["durum"] == "reddedildi")
+    bekle  = sum(1 for r in rows if r["durum"] == "beklemede")
+
+    firmalar, bolumler = {}, {}
     for r in rows:
         try:
             ext = json.loads(r["extracted_json"] or "{}")
-            items.append(
-                f"#{r['id']} {ext.get('ad_soyad','?')} | "
-                f"{ext.get('bolum','?')} | {ext.get('firma_adi','?')} | "
-                f"{r['ai_karar']} | Tarih: {r['yukleme_tarihi']}"
-            )
         except Exception:
             continue
+        firma = (ext.get("firma_adi") or "").strip()
+        bolum = (ext.get("bolum") or "").strip()
+        if firma: firmalar[firma] = firmalar.get(firma, 0) + 1
+        if bolum: bolumler[bolum] = bolumler.get(bolum, 0) + 1
 
-    sistem = (
-        "Sen bir staj başvuruları analiz uzmanısın. Sekretere kısa, net, "
-        "vurgulu Türkçe özet sunarsın. Maddeler halinde ve emojilerle."
-    )
-    kullanici = (
-        "Aşağıda son 20 staj başvurusu var. Bu başvuruları analiz et:\n\n"
-        + "\n".join(items)
-        + "\n\nÖzetinde şunları yer ver:\n"
-        "1. 📊 Genel istatistik (kaç KABUL, kaç RED)\n"
-        "2. 🏢 En çok başvuru gelen firmalar\n"
-        "3. 🎓 En aktif bölümler\n"
-        "4. ⚠️ Dikkat edilmesi gereken (acil/şüpheli) başvurular\n"
-        "5. 💡 Sekretere öneriler"
-    )
+    top_firma = sorted(firmalar.items(), key=lambda x: -x[1])[:5]
+    top_bolum = sorted(bolumler.items(), key=lambda x: -x[1])[:5]
 
-    ol, _ = load_services()
-    try:
-        model = ol.available_model(aktif_model())
-        ozet  = ol.chat(model=model,
-                        messages=[{"role":"system","content":sistem},
-                                  {"role":"user","content":kullanici}],
-                        timeout=90, options={"temperature":0.3})
-        return jsonify({"ozet": ozet})
-    except Exception as e:
-        return jsonify({"ozet": f"Hata: {e}"}), 500
+    # Bugün ve son 7 gün başvuru sayısı
+    from datetime import date as _date, timedelta as _td
+    bugun_str = _date.today().isoformat()
+    son7 = (_date.today() - _td(days=7)).isoformat()
+    bugun_say = sum(1 for r in rows if (r["yukleme_tarihi"] or "")[:10] == bugun_str)
+    son7_say  = sum(1 for r in rows if (r["yukleme_tarihi"] or "")[:10] >= son7)
+
+    # 2) Markdown özet metni oluştur (LLM'siz, anında)
+    ozet = f"""## 📊 Genel İstatistik
+- **Toplam başvuru:** {toplam}
+- ✅ Kabul: **{onayli}** ({(onayli/toplam*100):.0f}%)
+- ❌ Red: **{reddi}** ({(reddi/toplam*100):.0f}%)
+- ⏳ Beklemede: **{bekle}**
+
+## 📈 Aktivite
+- Bugün gelen: **{bugun_say}** başvuru
+- Son 7 gün: **{son7_say}** başvuru
+
+## 🏢 En Çok Başvuru Gelen Firmalar
+"""
+    if top_firma:
+        for i, (f, n) in enumerate(top_firma, 1):
+            ozet += f"{i}. **{f}** — {n} başvuru\n"
+    else:
+        ozet += "_Veri yok._\n"
+
+    ozet += "\n## 🎓 En Aktif Bölümler\n"
+    if top_bolum:
+        for i, (b, n) in enumerate(top_bolum, 1):
+            ozet += f"{i}. **{b}** — {n} başvuru\n"
+    else:
+        ozet += "_Veri yok._\n"
+
+    # 3) Kural tabanlı öneri (LLM yok — anında, asla timeout olmaz)
+    oneriler = []
+    if bekle > 0:
+        oneriler.append(f"⚡ **{bekle} bekleyen başvuru** var. İncelemeniz öneriliyor.")
+    if reddi > 0 and onayli > 0:
+        kabul_pct = onayli / toplam * 100
+        if kabul_pct < 50:
+            oneriler.append(f"⚠️ Kabul oranı düşük (%{kabul_pct:.0f}). Yönerge bilgilendirmesi öğrencilere ulaştırılabilir.")
+        else:
+            oneriler.append(f"✅ Kabul oranı sağlıklı (%{kabul_pct:.0f}).")
+    if bugun_say == 0 and son7_say > 0:
+        oneriler.append("📅 Bugün yeni başvuru yok ama son 7 günde aktivite var.")
+    elif bugun_say > 5:
+        oneriler.append(f"🔥 Yoğun gün: bugün {bugun_say} yeni başvuru geldi.")
+
+    # Aynı firma birden fazla başvuru varsa not düş
+    coklu_firmalar = [f for f, n in firmalar.items() if n >= 2]
+    if coklu_firmalar:
+        oneriler.append(f"🏢 {len(coklu_firmalar)} firma birden fazla başvuru aldı — popüler staj alanları.")
+
+    if not oneriler:
+        oneriler.append("📋 Sistem sağlıklı, dikkat edilmesi gereken bir durum yok.")
+
+    ozet += "\n## 💡 Öneriler\n"
+    for o in oneriler:
+        ozet += f"- {o}\n"
+
+    return jsonify({"ozet": ozet})
 
 
 @app.route("/api/rapor/karar", methods=["POST"])
@@ -998,39 +1168,61 @@ def api_rapor_karar():
 # ─── 🤖 AGENT (Tool Kullanan LLM) ─────────────────────────────────────────────
 
 AGENT_TOOLS_DOC = """
-KULLANABILECEĞİN ARAÇLAR (sadece JSON ile çağırırsın):
+KULLANABILECEĞİN ARAÇLAR (tool_calls içinde JSON ile çağırırsın):
 
-1. LIST_BASVURU(filter)   → Başvuru listele.
-   filter: "hepsi" | "beklemede" | "kabul" | "red"
-   Örnek: {"tool":"LIST_BASVURU","args":{"filter":"beklemede"}}
+- LIST_BASVURU  → Başvuru listele. input: {"filter": "hepsi|beklemede|kabul|red"}
+- GET_BASVURU   → Tek başvuru detayı. input: {"id": <int>}
+- ONAYLA        → Başvuruyu onayla. input: {"id": <int>, "sebep": "<metin>"}
+- REDDET        → Başvuruyu reddet. input: {"id": <int>, "sebep": "<metin>"}
+- ARA           → Başvurularda arama. input: {"anahtar": "<metin>"}
+- ISTATISTIK    → İstatistik. input: {"tip": "ozet|firma|bolum|donem"}
+- ONCELIK       → Bekleyenleri risk sırasına göre listele. input: {}
+- CEVAP         → Sekretere mesaj/soru. input: {"metin": "<metin>"}
+"""
 
-2. GET_BASVURU(id)        → Tek bir başvuru detayı.
-   Örnek: {"tool":"GET_BASVURU","args":{"id":5}}
-
-3. ONAYLA(id, sebep)      → Başvuruyu onayla.
-   Örnek: {"tool":"ONAYLA","args":{"id":3,"sebep":"Tüm kriterler uygun"}}
-
-4. REDDET(id, sebep)      → Başvuruyu reddet.
-   Örnek: {"tool":"REDDET","args":{"id":3,"sebep":"Tarihler dönem dışı"}}
-
-5. ARA(anahtar)           → Başvurularda metin ara (ad, firma, bölüm).
-   Örnek: {"tool":"ARA","args":{"anahtar":"yazılım"}}
-
-6. ISTATISTIK(tip)        → İstatistik üret.
-   tip: "ozet" | "firma" | "bolum" | "donem"
-   Örnek: {"tool":"ISTATISTIK","args":{"tip":"firma"}}
-
-7. ONCELIK_SIRALA()       → Bekleyen başvuruları aciliyete göre sırala.
-
-8. CEVAP(metin)           → İşlem gerektirmeyen direkt yanıt.
-   Örnek: {"tool":"CEVAP","args":{"metin":"Merhaba!"}}
+AGENT_OTONOMUS_SISTEM = """Sen Amasya MYO Staj sisteminin TAM OTONOM AGENT'ısın.
 
 KURALLAR:
-- SADECE JSON döndür, başka açıklama yazma.
-- Birden fazla işlem gerekirse en kritik olanı seç.
-- ID belirtilmemişse önce LIST_BASVURU veya ARA kullan.
-- ONAYLA/REDDET için mutlaka ID gerekir; yoksa CEVAP ile sor.
-"""
+- ASLA açıklayıcı metin yazma. ASLA markdown başlık (📋, 🔍 vs.) yazma.
+- SADECE TEK BİR JSON objesi döndür. Başka hiçbir şey yok.
+- JSON'un dışına tek karakter bile yazma.
+
+PLAN: kısa teknik adımlar listesi (ör: ["liste_cek", "filtrele", "ozet_uret"]).
+TOOL: gerekli tool çağrılarının listesi (her biri tool, input, reason içerir).
+ANALİZ: başvuru analiz edilmediyse boş obje {}, edilmişse:
+  gun_durumu (YETERLI/YETERSIZ/BILINMIYOR),
+  tarih_durumu (GECERLI/GECERSIZ/BILINMIYOR),
+  firma_durumu (UYGUN/RISKLI/UYGUN_DEGIL/BILINMIYOR),
+  belge_durumu (TAM/EKSIK/BILINMIYOR),
+  gecmis_durum (VAR/YOK/BILINMIYOR),
+  tekrar_durumu (true/false),
+  risk_skoru (0-100).
+KARAR.sonuc: KABUL | RED | BEKLEME.
+KARAR.nedenler: kısa neden listesi.
+ACIKLAMA: 1-2 cümle Türkçe özet.
+
+ÇIKTI ŞEMASI (sadece bu yapı, başka şey yok):
+{"plan":[],"tool_calls":[{"tool":"","input":{},"reason":""}],"analiz":{},"karar":{"sonuc":"","nedenler":[]},"aciklama":""}
+
+YASAKLAR: Halüsinasyon yapma, tarih uydurma, plansız işlem yapma.
+""" + AGENT_TOOLS_DOC
+
+def _gecerli_submission_ids():
+    """Sadece PDF dosyası mevcut olan submission id'leri.
+    Sekreter ekranı da bu filtreyi uyguluyor — agent da aynısını uygulamalı."""
+    ids = set()
+    if UPLOAD.exists():
+        for f in UPLOAD.glob("*.pdf"):
+            stem = f.stem
+            if stem.isdigit():
+                ids.add(int(stem))
+    return ids
+
+def _filtrele_pdf_var(rows):
+    """sqlite3.Row listesini PDF'i olanlarla sınırla."""
+    gecerli = _gecerli_submission_ids()
+    return [r for r in rows if r["id"] in gecerli]
+
 
 def _agent_tool_list(filter_="hepsi"):
     q = "SELECT id, original_adi, durum, ai_karar, yukleme_tarihi, extracted_json FROM submissions"
@@ -1041,8 +1233,8 @@ def _agent_tool_list(filter_="hepsi"):
         q += " WHERE ai_karar='KABUL'"
     elif filter_ == "red":
         q += " WHERE ai_karar='RED'"
-    q += " ORDER BY id DESC LIMIT 30"
-    rows = get_db().execute(q, args).fetchall()
+    q += " ORDER BY id DESC"
+    rows = _filtrele_pdf_var(get_db().execute(q, args).fetchall())[:30]
     out = []
     for r in rows:
         try:
@@ -1056,6 +1248,9 @@ def _agent_tool_list(filter_="hepsi"):
     return out
 
 def _agent_tool_get(id_):
+    # PDF yoksa erişilemez
+    if id_ not in _gecerli_submission_ids():
+        return {"hata": f"#{id_} bulunamadı veya PDF dosyası yok"}
     r = get_db().execute("SELECT * FROM submissions WHERE id=?", (id_,)).fetchone()
     if not r: return {"hata": f"#{id_} bulunamadı"}
     d = dict(r)
@@ -1065,6 +1260,8 @@ def _agent_tool_get(id_):
     return d
 
 def _agent_tool_karar(id_, karar, sebep=""):
+    if id_ not in _gecerli_submission_ids():
+        return {"hata": f"#{id_} bulunamadı veya PDF yok"}
     durum = "onaylandi" if karar == "KABUL" else "reddedildi"
     with get_db() as c:
         cur = c.execute("UPDATE submissions SET durum=?, ai_karar=? WHERE id=?",
@@ -1074,9 +1271,9 @@ def _agent_tool_karar(id_, karar, sebep=""):
     return {"ok": True, "id": id_, "yeni_durum": durum, "sebep": sebep}
 
 def _agent_tool_ara(anahtar):
-    rows = get_db().execute(
+    rows = _filtrele_pdf_var(get_db().execute(
         "SELECT id, original_adi, ai_karar, durum, extracted_json FROM submissions ORDER BY id DESC"
-    ).fetchall()
+    ).fetchall())
     a = (anahtar or "").lower()
     bulunan = []
     for r in rows:
@@ -1090,13 +1287,13 @@ def _agent_tool_ara(anahtar):
     return bulunan[:20]
 
 def _agent_tool_istatistik(tip):
-    rows = get_db().execute("SELECT * FROM submissions").fetchall()
+    rows = _filtrele_pdf_var(get_db().execute("SELECT * FROM submissions").fetchall())
     if tip == "ozet":
         return {
             "toplam":     len(rows),
-            "kabul":      sum(1 for r in rows if r["ai_karar"] == "KABUL"),
-            "red":        sum(1 for r in rows if r["ai_karar"] == "RED"),
-            "beklemede":  sum(1 for r in rows if r["durum"]    == "beklemede"),
+            "kabul":      sum(1 for r in rows if r["durum"] == "onaylandi"),
+            "red":        sum(1 for r in rows if r["durum"] == "reddedildi"),
+            "beklemede":  sum(1 for r in rows if r["durum"] == "beklemede"),
         }
     sayac = {}
     key = "firma_adi" if tip == "firma" else "bolum"
@@ -1110,9 +1307,9 @@ def _agent_tool_istatistik(tip):
 
 def _agent_tool_oncelik():
     """Bekleyen başvuruları aciliyete göre sırala."""
-    rows = get_db().execute(
+    rows = _filtrele_pdf_var(get_db().execute(
         "SELECT * FROM submissions WHERE durum='beklemede' ORDER BY id DESC"
-    ).fetchall()
+    ).fetchall())
     skorlu = []
     for r in rows:
         try: ext = json.loads(r["extracted_json"] or "{}")
@@ -1135,6 +1332,150 @@ def _agent_tool_oncelik():
         })
     return sorted(skorlu, key=lambda x: -x["oncelik"])
 
+def _agent_parse_yanit(raw: str) -> dict:
+    """LLM'in döndürdüğü metinden agent JSON yanıtını çıkar.
+    plan/tool_calls/karar key'lerinden en az birini içeren en geniş JSON'u alır."""
+    import re as _re
+    # Tüm üst-seviye {...} bloklarını bul (basit dengeleme algoritması)
+    candidates = []
+    depth = 0; start = -1
+    for i, ch in enumerate(raw):
+        if ch == '{':
+            if depth == 0: start = i
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0 and start >= 0:
+                candidates.append(raw[start:i+1])
+                start = -1
+    # Her aday için parse + agent key kontrolü
+    AGENT_KEYS = {'plan', 'tool_calls', 'karar', 'analiz', 'aciklama'}
+    en_iyi = None; en_iyi_skor = -1
+    for cand in candidates:
+        try:
+            obj = json.loads(cand)
+            if not isinstance(obj, dict): continue
+            skor = sum(1 for k in AGENT_KEYS if k in obj)
+            if skor > en_iyi_skor:
+                en_iyi_skor = skor
+                en_iyi = obj
+        except Exception:
+            continue
+    return en_iyi or {}
+
+
+def _agent_tool_calistir(tool_name: str, inp: dict):
+    """Tek bir tool'u güvenli şekilde çalıştır. (tool_name, sonuc) döndürür."""
+    tn = (tool_name or "").upper()
+    try:
+        if   tn == "LIST_BASVURU": return tn, _agent_tool_list(inp.get("filter","hepsi"))
+        elif tn == "GET_BASVURU":  return tn, _agent_tool_get(int(inp.get("id",0)))
+        elif tn == "ONAYLA":       return tn, _agent_tool_karar(int(inp.get("id",0)), "KABUL", inp.get("sebep",""))
+        elif tn == "REDDET":       return tn, _agent_tool_karar(int(inp.get("id",0)), "RED",   inp.get("sebep",""))
+        elif tn == "ARA":          return tn, _agent_tool_ara(inp.get("anahtar",""))
+        elif tn == "ISTATISTIK":   return tn, _agent_tool_istatistik(inp.get("tip","ozet"))
+        elif tn in ("ONCELIK","ONCELIK_SIRALA"): return tn, _agent_tool_oncelik()
+        elif tn == "CEVAP":        return tn, {"mesaj": inp.get("metin","")}
+        else:                      return tn, {"hata": f"Bilinmeyen tool: {tn}"}
+    except Exception as e:
+        return tn, {"hata": str(e)}
+
+
+@app.route("/api/agent/direct", methods=["POST"])
+@sekreter_required
+def api_agent_direct():
+    """LLM bypass — tool'u doğrudan çağırır. Hızlı butonlar için."""
+    data = request.get_json(force=True) or {}
+    tool = (data.get("tool") or "").upper()
+    inp  = data.get("input") or {}
+    tn, sonuc = _agent_tool_calistir(tool, inp)
+    return jsonify({
+        "ok": True,
+        "plan": [tn.lower()],
+        "tool_calls": [{"tool": tn, "input": inp, "reason": "Hızlı buton", "sonuc": sonuc}],
+        "analiz": {},
+        "karar": {"sonuc": "BEKLEME", "nedenler": []},
+        "aciklama": "",
+    })
+
+
+def _agent_kural_tabanli(komut: str):
+    """Yaygın sorulara LLM'siz hızlı yanıt. Match yoksa None döner."""
+    import re as _re
+    k = komut.lower().strip()
+
+    # "kaç başvuru / başvuru sayısı"
+    if _re.search(r'(kaç|sayı|toplam).*başvuru', k) or 'durum özet' in k or 'istatistik' in k:
+        # Bölüm filtresi var mı? "pc bölüm", "bilgisayar bölüm" gibi
+        m = _re.search(r'(\w+)\s*böl[uü]m', k)
+        if m:
+            anahtar = m.group(1)
+            _, sonuc = _agent_tool_calistir("ARA", {"anahtar": anahtar})
+            sayi = len(sonuc) if isinstance(sonuc, list) else 0
+            return {
+                "plan": ["arama_yap", "say"],
+                "tool_calls": [{"tool":"ARA","input":{"anahtar":anahtar},"reason":f"'{anahtar}' içeren başvuruları bul","sonuc":sonuc}],
+                "analiz": {},
+                "karar": {"sonuc":"BEKLEME","nedenler":[]},
+                "aciklama": f"'{anahtar}' bölümünde {sayi} başvuru bulundu.",
+            }
+        _, sonuc = _agent_tool_calistir("ISTATISTIK", {"tip":"ozet"})
+        return {
+            "plan":["istatistik_cek"],
+            "tool_calls":[{"tool":"ISTATISTIK","input":{"tip":"ozet"},"reason":"Genel istatistik","sonuc":sonuc}],
+            "analiz":{},"karar":{"sonuc":"BEKLEME","nedenler":[]},"aciklama":"",
+        }
+
+    # "firma" kelimesi → firma istatistiği
+    if 'firma' in k and ('top' in k or 'çok' in k or 'liste' in k or 'dağılım' in k):
+        _, sonuc = _agent_tool_calistir("ISTATISTIK", {"tip":"firma"})
+        return {"plan":["firma_dagilim"],"tool_calls":[{"tool":"ISTATISTIK","input":{"tip":"firma"},"reason":"Firma dağılımı","sonuc":sonuc}],
+                "analiz":{},"karar":{"sonuc":"BEKLEME","nedenler":[]},"aciklama":""}
+
+    # "bölüm" → bölüm istatistiği
+    if 'bölüm' in k and ('dağılım' in k or 'liste' in k or 'çok' in k):
+        _, sonuc = _agent_tool_calistir("ISTATISTIK", {"tip":"bolum"})
+        return {"plan":["bolum_dagilim"],"tool_calls":[{"tool":"ISTATISTIK","input":{"tip":"bolum"},"reason":"Bölüm dağılımı","sonuc":sonuc}],
+                "analiz":{},"karar":{"sonuc":"BEKLEME","nedenler":[]},"aciklama":""}
+
+    # "öncelik" → ONCELIK
+    if 'öncelik' in k or 'acil' in k:
+        _, sonuc = _agent_tool_calistir("ONCELIK", {})
+        return {"plan":["oncelik_sirala"],"tool_calls":[{"tool":"ONCELIK","input":{},"reason":"Öncelik sırası","sonuc":sonuc}],
+                "analiz":{},"karar":{"sonuc":"BEKLEME","nedenler":[]},"aciklama":""}
+
+    # "bekleyen başvuru"
+    if 'bekleyen' in k or 'beklemede' in k:
+        _, sonuc = _agent_tool_calistir("LIST_BASVURU", {"filter":"beklemede"})
+        return {"plan":["liste_cek"],"tool_calls":[{"tool":"LIST_BASVURU","input":{"filter":"beklemede"},"reason":"Bekleyenleri listele","sonuc":sonuc}],
+                "analiz":{},"karar":{"sonuc":"BEKLEME","nedenler":[]},"aciklama":""}
+
+    # "ID 5" / "5 numaralı" / "#5" / "5. başvuru" → GET_BASVURU
+    m = (_re.search(r'#\s*(\d+)', k)
+         or _re.search(r'(?:^|\s)id\s*[:=]?\s*(\d+)', k)
+         or _re.search(r'(\d+)\s*numara', k)
+         or _re.search(r'numara\s*(\d+)', k)
+         or _re.search(r'(\d+)\.?\s*(?:başvuru|basvuru)', k))
+    if m:
+        sid = int(m.group(1))
+        _, sonuc = _agent_tool_calistir("GET_BASVURU", {"id":sid})
+        return {"plan":["detay_cek"],"tool_calls":[{"tool":"GET_BASVURU","input":{"id":sid},"reason":f"#{sid} detay","sonuc":sonuc}],
+                "analiz":{},"karar":{"sonuc":"BEKLEME","nedenler":[]},"aciklama":""}
+
+    # "ara X" / "X ara" / "X bul" / "X firma/firmasını"
+    m = (_re.search(r'(?:ara[mn]?|search|bul|getir)\s+([^\s]+)', k)
+         or _re.search(r'([^\s]+)\s+(?:ara[mn]?|bul|firmas[ıi]?n[ıi]?\s*ara)', k)
+         or _re.search(r'firma[sn]?[ıi]\s+([^\s]+)', k))
+    if m:
+        anahtar = m.group(1).strip('.,?!')
+        if len(anahtar) >= 2 and not anahtar.isdigit():
+            _, sonuc = _agent_tool_calistir("ARA", {"anahtar":anahtar})
+            return {"plan":["arama_yap"],"tool_calls":[{"tool":"ARA","input":{"anahtar":anahtar},"reason":f"'{anahtar}' ara","sonuc":sonuc}],
+                    "analiz":{},"karar":{"sonuc":"BEKLEME","nedenler":[]},"aciklama":""}
+
+    return None
+
+
 @app.route("/api/agent/komut", methods=["POST"])
 @sekreter_required
 def api_agent_komut():
@@ -1144,61 +1485,92 @@ def api_agent_komut():
     if not komut:
         return jsonify({"ok": False, "yanit": "Komut boş."})
 
-    sistem = (
-        "Sen Amasya MYO staj başvuru sisteminin agent'ısın. "
-        "Sekreterin doğal dildeki komutlarını analiz edip uygun aracı çağırırsın.\n\n"
-        + AGENT_TOOLS_DOC
-    )
+    # ÖNCE kural tabanlı hızlı yanıt dene
+    hizli = _agent_kural_tabanli(komut)
+    if hizli:
+        sonuclar = []
+        for tc in hizli["tool_calls"]:
+            sonuclar.append({
+                "tool": tc["tool"], "input": tc["input"],
+                "reason": tc.get("reason",""), "sonuc": tc["sonuc"],
+            })
+        hizli["tool_calls"] = sonuclar
+        hizli["ok"] = True
+        hizli["tool"] = sonuclar[0]["tool"] if sonuclar else None
+        hizli["yanit"] = hizli.get("aciklama","")
+        return jsonify(hizli)
+
+    # Kural eşleşmediyse LLM'e git
     ol, _ = load_services()
     try:
         model = ol.available_model(aktif_model())
         raw = ol.chat(
             model=model,
-            messages=[{"role":"system","content":sistem},
-                      {"role":"user","content":f"Komut: {komut}"}],
-            timeout=60, options={"temperature":0.0},
+            messages=[
+                {"role": "system", "content": AGENT_OTONOMUS_SISTEM},
+                {"role": "user",   "content": f"KOMUT/OLAY: {komut}"},
+            ],
+            timeout=120, options={"temperature": 0.05},
         )
     except Exception as e:
+        # LLM hatasında: en azından arama yapmayı dene
+        _, sonuc = _agent_tool_calistir("ARA", {"anahtar": komut[:30]})
+        if isinstance(sonuc, list) and sonuc:
+            return jsonify({
+                "ok": True, "plan":["fallback_arama"],
+                "tool_calls":[{"tool":"ARA","input":{"anahtar":komut[:30]},"reason":"LLM timeout — arama fallback","sonuc":sonuc}],
+                "analiz":{}, "karar":{"sonuc":"BEKLEME","nedenler":[]},
+                "aciklama": f"LLM yanıt vermedi, '{komut[:30]}' için arama sonuçları gösteriliyor.",
+            })
         return jsonify({"ok": False, "yanit": f"LLM hatası: {e}"})
 
-    parsed = extract_json_object(raw) or {}
-    tool   = (parsed.get("tool") or "").upper()
-    args   = parsed.get("args") or {}
+    # Yeni gelişmiş parser — en uygun JSON'u seç
+    parsed = _agent_parse_yanit(raw)
+    if not parsed:
+        parsed = extract_json_object(raw) or {}
 
-    sonuc = None
-    try:
-        if   tool == "LIST_BASVURU":  sonuc = _agent_tool_list(args.get("filter","hepsi"))
-        elif tool == "GET_BASVURU":   sonuc = _agent_tool_get(int(args.get("id",0)))
-        elif tool == "ONAYLA":        sonuc = _agent_tool_karar(int(args.get("id",0)), "KABUL", args.get("sebep",""))
-        elif tool == "REDDET":        sonuc = _agent_tool_karar(int(args.get("id",0)), "RED",   args.get("sebep",""))
-        elif tool == "ARA":           sonuc = _agent_tool_ara(args.get("anahtar",""))
-        elif tool == "ISTATISTIK":    sonuc = _agent_tool_istatistik(args.get("tip","ozet"))
-        elif tool == "ONCELIK_SIRALA": sonuc = _agent_tool_oncelik()
-        elif tool == "CEVAP":         sonuc = {"mesaj": args.get("metin","")}
-        else:
-            return jsonify({"ok": False, "yanit": f"Anlaşılamadı: {raw[:200]}"})
-    except Exception as e:
-        return jsonify({"ok": False, "yanit": f"Araç hatası: {e}"})
+    # Geriye dönük uyumluluk: eski format {tool, args} → yeni formata dönüştür
+    if "tool" in parsed and "tool_calls" not in parsed:
+        parsed = {
+            "plan": [parsed.get("tool","").lower()],
+            "tool_calls": [{
+                "tool": parsed.get("tool",""),
+                "input": parsed.get("args", {}),
+                "reason": "Tek adımlı işlem",
+            }],
+            "analiz": {},
+            "karar": {"sonuc": "BEKLEME", "nedenler": []},
+            "aciklama": "",
+        }
 
-    # Sonucu doğal dile çevir
-    try:
-        sentez_sistem = (
-            "Sen agent'sın. Bir araç çalıştırdın ve sonuç geldi. "
-            "Sekretere KISA, NET, Türkçe, emojili bir özet sun. Maddeler kullan."
-        )
-        sentez_user = (
-            f"KOMUT: {komut}\n"
-            f"ÇALIŞTIRILAN ARAÇ: {tool}\n"
-            f"SONUÇ:\n{json.dumps(sonuc, ensure_ascii=False)[:3000]}"
-        )
-        cevap = ol.chat(model=model,
-                        messages=[{"role":"system","content":sentez_sistem},
-                                  {"role":"user","content":sentez_user}],
-                        timeout=60, options={"temperature":0.3})
-    except Exception:
-        cevap = json.dumps(sonuc, ensure_ascii=False, indent=2)
+    plan       = parsed.get("plan") or []
+    tool_calls = parsed.get("tool_calls") or []
+    analiz     = parsed.get("analiz") or {}
+    karar      = parsed.get("karar") or {"sonuc": "BEKLEME", "nedenler": []}
+    aciklama   = parsed.get("aciklama") or ""
 
-    return jsonify({"ok": True, "tool": tool, "args": args, "sonuc": sonuc, "yanit": cevap})
+    # Tüm tool çağrılarını sırayla çalıştır
+    sonuclar = []
+    for tc in tool_calls[:5]:   # en fazla 5 tool çağrısı
+        if not isinstance(tc, dict): continue
+        tool_name = tc.get("tool","")
+        inp       = tc.get("input") or tc.get("args") or {}
+        reason    = tc.get("reason","")
+        tn, sonuc = _agent_tool_calistir(tool_name, inp)
+        sonuclar.append({"tool": tn, "input": inp, "reason": reason, "sonuc": sonuc})
+
+    # Eğer hiç tool çağrılmadıysa ve karar BEKLEME değilse: sadece açıklama
+    return jsonify({
+        "ok": True,
+        "plan": plan,
+        "tool_calls": sonuclar,
+        "analiz": analiz,
+        "karar": karar,
+        "aciklama": aciklama,
+        # Geriye dönük: ilk tool sonucunu da gönder (frontend için)
+        "tool": sonuclar[0]["tool"] if sonuclar else None,
+        "yanit": aciklama or (sonuclar[0]["sonuc"].get("mesaj","") if sonuclar and isinstance(sonuclar[0].get("sonuc"), dict) else ""),
+    })
 
 
 if __name__ == "__main__":

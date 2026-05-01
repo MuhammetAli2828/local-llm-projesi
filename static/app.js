@@ -169,14 +169,31 @@ async function runValidate() {
 }
 
 /* ── KURALLAR ─────────────────────────────────────────────────────────────── */
+function _esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 async function loadKurallar() {
   const list = document.getElementById('kurallar-list');
   if (!list) return;
   try {
     const res  = await fetch('/api/kurallar');
     const data = await res.json();
-    if (data.kurallar && data.kurallar.length) {
-      list.innerHTML = data.kurallar.map(k => `<div class="rule-item">${k}</div>`).join('');
+    const kats = data.kategoriler;
+    if (kats && kats.length) {
+      list.innerHTML = kats.map(k => {
+        const maddeler = (k.maddeler || []).map(m =>
+          `<li class="kural-madde">${_esc(m)}</li>`
+        ).join('');
+        return `
+          <div class="kural-kategori">
+            <div class="kural-kategori-head">
+              <span class="kural-ikon">${_esc(k.ikon||'•')}</span>
+              <span class="kural-baslik">${_esc(k.baslik||'')}</span>
+            </div>
+            <ul class="kural-maddeler">${maddeler}</ul>
+          </div>`;
+      }).join('');
     } else {
       list.innerHTML = '<div class="fb-item info">ℹ️ Yönerge bulunamadı.</div>';
     }
@@ -337,13 +354,15 @@ async function sendChat() {
       body: JSON.stringify({ soru, gecmis: _chatHistory.slice(0,-1) }),
     });
     const data = await res.json();
+    const isHata = (data.yanit || '').toLowerCase().startsWith('ollama hatası');
     typing.innerHTML = mdToHtml(data.yanit);
     typing.classList.remove('typing');
-    _chatHistory.push({ role: 'assistant', content: data.yanit });
+    if (isHata) typing.classList.add('chat-msg-error');
+    if (!isHata) _chatHistory.push({ role: 'assistant', content: data.yanit });
     if (_chatHistory.length > 20) _chatHistory = _chatHistory.slice(-20);
 
-    // Form alanı verisi geldiyse otomatik doldur
-    if (data.form_data && Object.keys(data.form_data).length > 0) {
+    // Form alanı verisi geldiyse otomatik doldur (chat başarısız olduysa atlanır)
+    if (!isHata && data.form_data && Object.keys(data.form_data).length > 0) {
       const ALAN_ADLARI = {
         baslangic_tarihi: 'Başlangıç',
         bitis_tarihi:     'Bitiş',
@@ -587,16 +606,120 @@ function exportCSV() {
 }
 
 /* ── 🤖 AGENT ─────────────────────────────────────────────────────────────── */
+function _renderToolSonuc(tool, sonuc) {
+  /* Tool sonucunu kullanıcı dostu formatta göster (sayılar, listeler vs.) */
+  if (!sonuc || sonuc.hata) {
+    return `<div class="agent-hata">❌ ${_esc(sonuc?.hata || 'Sonuç yok')}</div>`;
+  }
+
+  const t = (tool || '').toUpperCase();
+
+  // ISTATISTIK ozet → 4 metrik kartı
+  if (t === 'ISTATISTIK' && 'toplam' in sonuc) {
+    return `<div class="agent-stats">
+      <div class="agent-stat-card stat-toplam"><div class="stat-num">${sonuc.toplam}</div><div class="stat-lbl">Toplam</div></div>
+      <div class="agent-stat-card stat-kabul"><div class="stat-num">${sonuc.kabul||0}</div><div class="stat-lbl">Kabul</div></div>
+      <div class="agent-stat-card stat-red"><div class="stat-num">${sonuc.red||0}</div><div class="stat-lbl">Red</div></div>
+      <div class="agent-stat-card stat-bekle"><div class="stat-num">${sonuc.beklemede||0}</div><div class="stat-lbl">Beklemede</div></div>
+    </div>`;
+  }
+
+  // ISTATISTIK firma/bolum → bar chart benzeri liste
+  if (t === 'ISTATISTIK' && (sonuc.firma || sonuc.bolum)) {
+    const liste = sonuc.firma || sonuc.bolum;
+    const baslik = sonuc.firma ? '🏢 Firmalara Göre Dağılım' : '🎓 Bölümlere Göre Dağılım';
+    const max = Math.max(...liste.map(x => x.sayi), 1);
+    let h = `<div class="agent-rank-baslik">${baslik}</div><div class="agent-rank-list">`;
+    liste.forEach((it, i) => {
+      const pct = (it.sayi / max) * 100;
+      h += `<div class="agent-rank-row">
+        <span class="agent-rank-num">#${i+1}</span>
+        <span class="agent-rank-isim">${_esc(it.isim)}</span>
+        <div class="agent-rank-bar"><div class="agent-rank-fill" style="width:${pct}%"></div></div>
+        <span class="agent-rank-sayi">${it.sayi}</span>
+      </div>`;
+    });
+    h += '</div>';
+    return h;
+  }
+
+  // LIST_BASVURU / ARA / ONCELIK → başvuru listesi tablosu
+  if ((t === 'LIST_BASVURU' || t === 'ARA' || t === 'ONCELIK' || t === 'ONCELIK_SIRALA') && Array.isArray(sonuc)) {
+    if (sonuc.length === 0) return '<div class="agent-bos">📭 Sonuç bulunamadı.</div>';
+    let h = `<div class="agent-list-baslik">📋 ${sonuc.length} başvuru</div>`;
+    h += '<div class="agent-basvuru-list">';
+    sonuc.forEach(b => {
+      const kararCls = b.durum === 'onaylandi' ? 'kabul' : b.durum === 'reddedildi' ? 'red' : 'bekle';
+      const icon = b.durum === 'onaylandi' ? '✅' : b.durum === 'reddedildi' ? '❌' : '⏳';
+      h += `<div class="agent-basvuru-item ${kararCls}">
+        <span class="agent-basvuru-id">#${b.id}</span>
+        <div class="agent-basvuru-info">
+          <div class="agent-basvuru-ad">${_esc(b.ad || '?')}</div>
+          <div class="agent-basvuru-meta">${_esc(b.firma || '—')} · ${_esc(b.bolum || '—')}</div>
+        </div>
+        <span class="agent-basvuru-badge badge-${kararCls}">${icon} ${_esc(b.karar || b.durum || '—')}</span>
+      </div>`;
+    });
+    h += '</div>';
+    return h;
+  }
+
+  // GET_BASVURU → tek başvuru detayı
+  if (t === 'GET_BASVURU' && sonuc.id) {
+    const f = sonuc.form || {};
+    const kararCls = sonuc.durum === 'onaylandi' ? 'kabul' : sonuc.durum === 'reddedildi' ? 'red' : 'bekle';
+    let h = `<div class="agent-detay">
+      <div class="agent-detay-baslik">📄 #${sonuc.id} — ${_esc(f.ad_soyad || sonuc.original_adi || '?')}
+        <span class="agent-basvuru-badge badge-${kararCls}">${_esc(sonuc.durum || '—')}</span>
+      </div>
+      <div class="agent-detay-grid">`;
+    [['Bölüm','bolum'],['Öğrenci No','ogrenci_no'],['Firma','firma_adi'],
+     ['Başlangıç','baslangic_tarihi'],['Bitiş','bitis_tarihi'],['Gün','staj_gun_sayisi']
+    ].forEach(([lbl,k])=>{
+      if (f[k]) h += `<div><span class="lbl">${lbl}:</span> ${_esc(f[k])}</div>`;
+    });
+    h += '</div>';
+    if (sonuc.ai_mesaj) h += `<div class="agent-detay-msg">💬 ${_esc(sonuc.ai_mesaj)}</div>`;
+    h += '</div>';
+    return h;
+  }
+
+  // ONAYLA / REDDET sonuç
+  if ((t === 'ONAYLA' || t === 'REDDET') && sonuc.ok) {
+    const ic = t === 'ONAYLA' ? '✅' : '❌';
+    return `<div class="agent-islem ${t.toLowerCase()}">
+      ${ic} #${sonuc.id} → <strong>${_esc(sonuc.yeni_durum)}</strong>
+      ${sonuc.sebep ? `<div class="agent-sebep">${_esc(sonuc.sebep)}</div>` : ''}
+    </div>`;
+  }
+
+  // CEVAP — düz mesaj
+  if (t === 'CEVAP' && sonuc.mesaj) {
+    return `<div class="agent-cevap">${mdToHtml(sonuc.mesaj)}</div>`;
+  }
+
+  // Bilinmeyen → JSON pretty
+  return `<pre class="agent-raw">${_esc(JSON.stringify(sonuc, null, 2).slice(0, 800))}</pre>`;
+}
+
+let _agentBusy = false;
 async function agentGonder(directKomut) {
+  if (_agentBusy) return;   // Çift tıklamayı engelle
+  _agentBusy = true;
+
   const input  = document.getElementById('agent-input');
   const result = document.getElementById('agent-result');
   const komut  = directKomut || (input?.value.trim()) || '';
-  if (!komut) return;
+  if (!komut) { _agentBusy = false; return; }
 
+  // Tüm Sor / agent butonlarını disable et
+  document.querySelectorAll('.agent-soru-row button, .agent-action-btn').forEach(b => b.disabled = true);
+
+  // Eski içeriği temizle (üst üste birikmesin)
   result.style.display = 'block';
   result.innerHTML =
-    `<div class="agent-msg agent-msg-user">👤 ${komut}</div>` +
-    `<div class="agent-msg agent-msg-bot agent-loading">⏳ Agent düşünüyor…</div>`;
+    `<div class="agent-msg agent-msg-user">👤 ${_esc(komut)}</div>` +
+    `<div class="agent-msg agent-loading">⏳ Asistan çalışıyor…</div>`;
 
   try {
     const res  = await fetch('/api/agent/komut', {
@@ -607,20 +730,89 @@ async function agentGonder(directKomut) {
     const loadEl = result.querySelector('.agent-loading');
     if (loadEl) loadEl.remove();
 
-    const toolBadge = data.tool
-      ? `<span class="agent-tool-badge">🔧 ${data.tool}</span>` : '';
-    result.insertAdjacentHTML('beforeend',
-      `<div class="agent-msg agent-msg-bot">${toolBadge}${mdToHtml(data.yanit || '—')}</div>`);
+    if (!data.ok) {
+      result.insertAdjacentHTML('beforeend',
+        `<div class="agent-msg agent-hata">❌ ${_esc(data.yanit || 'Hata')}</div>`);
+      return;
+    }
 
-    // İşlem yapıldıysa listeyi yenile
-    if (['ONAYLA','REDDET'].includes(data.tool)) {
+    let html = '<div class="agent-msg agent-msg-bot agent-rich">';
+
+    // 1. ÖZET (en üstte) — açıklama + karar varsa onlar
+    if (data.aciklama) {
+      html += `<div class="agent-ozet">${mdToHtml(data.aciklama)}</div>`;
+    }
+
+    // 2. KARAR (varsa, KABUL/RED/BEKLEME)
+    if (data.karar && data.karar.sonuc && data.karar.sonuc !== 'BEKLEME') {
+      const sonuc = data.karar.sonuc;
+      const kararCls = sonuc === 'KABUL' ? 'kabul' : 'red';
+      const kararIcon = sonuc === 'KABUL' ? '✅' : '❌';
+      html += `<div class="agent-karar agent-karar-${kararCls}">${kararIcon} <strong>${sonuc}</strong></div>`;
+      if (data.karar.nedenler && data.karar.nedenler.length) {
+        html += '<ul class="agent-nedenler">';
+        data.karar.nedenler.forEach(n => html += `<li>${_esc(n)}</li>`);
+        html += '</ul>';
+      }
+    }
+
+    // 3. SONUÇLAR (asıl önemli kısım — tool çıktıları)
+    if (data.tool_calls && data.tool_calls.length) {
+      data.tool_calls.forEach(tc => {
+        html += _renderToolSonuc(tc.tool, tc.sonuc);
+      });
+    }
+
+    // 4. ANALİZ (varsa, başvuru analiz edildiyse)
+    const a = data.analiz || {};
+    if (a.risk_skoru !== undefined && a.gun_durumu) {
+      const risk = parseInt(a.risk_skoru || 0);
+      const riskRenk = risk < 30 ? '#059669' : risk < 60 ? '#d97706' : '#dc2626';
+      html += '<div class="agent-analiz-mini">';
+      html += `<span class="agent-mini-baslik">🔍 Analiz:</span>`;
+      ['gun_durumu','tarih_durumu','firma_durumu','belge_durumu'].forEach(k => {
+        if (a[k] && a[k] !== 'BILINMIYOR')
+          html += `<span class="agent-analiz-tag">${k.split('_')[0]}: ${_esc(a[k])}</span>`;
+      });
+      html += `<span class="agent-analiz-tag" style="background:${riskRenk}20;color:${riskRenk}">Risk: ${risk}/100</span>`;
+      html += '</div>';
+    }
+
+    // 5. TEKNİK DETAY (collapsible — debug bilgisi)
+    if (data.plan?.length || data.tool_calls?.length) {
+      html += '<details class="agent-detay-toggle"><summary>🛠️ Teknik detay</summary>';
+      if (data.plan?.length) {
+        html += '<div class="agent-mini-blok"><b>Plan:</b> ' + data.plan.map(p=>`<code>${_esc(p)}</code>`).join(' → ') + '</div>';
+      }
+      if (data.tool_calls?.length) {
+        html += '<div class="agent-mini-blok"><b>Tool çağrıları:</b><ul>';
+        data.tool_calls.forEach(tc => {
+          html += `<li><code>${_esc(tc.tool)}(${_esc(JSON.stringify(tc.input||{}))})</code>`;
+          if (tc.reason) html += ` <span class="agent-mini-reason">— ${_esc(tc.reason)}</span>`;
+          html += '</li>';
+        });
+        html += '</ul></div>';
+      }
+      html += '</details>';
+    }
+
+    html += '</div>';
+    result.insertAdjacentHTML('beforeend', html);
+
+    // ONAYLA/REDDET varsa listeyi yenile
+    const islemYapildi = (data.tool_calls || []).some(tc =>
+      ['ONAYLA','REDDET'].includes((tc.tool||'').toUpperCase()));
+    if (islemYapildi) {
       loadBasvurular();
-      showToast('✅ İşlem yapıldı!');
+      showToast('✅ Agent işlem yaptı!');
     }
     if (input) input.value = '';
   } catch (e) {
     const loadEl = result.querySelector('.agent-loading');
     if (loadEl) loadEl.innerHTML = '❌ Hata: ' + e.message;
+  } finally {
+    _agentBusy = false;
+    document.querySelectorAll('.agent-soru-row button, .agent-action-btn').forEach(b => b.disabled = false);
   }
   result.scrollTop = result.scrollHeight;
 }
@@ -629,6 +821,65 @@ function agentHizli(komut) {
   const input = document.getElementById('agent-input');
   if (input) input.value = komut;
   agentGonder(komut);
+}
+
+/* Doğrudan tool çağrısı — LLM bypass, anında sonuç */
+async function agentDirect(tool, input, baslik) {
+  const result = document.getElementById('agent-result');
+  result.style.display = 'block';
+  result.innerHTML =
+    `<div class="agent-msg agent-msg-user">👤 ${_esc(baslik)}</div>` +
+    `<div class="agent-msg agent-loading">⏳ Veriler getiriliyor…</div>`;
+  try {
+    const res = await fetch('/api/agent/direct', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({tool, input}),
+    });
+    const data = await res.json();
+    const loadEl = result.querySelector('.agent-loading');
+    if (loadEl) loadEl.remove();
+    let html = '<div class="agent-msg agent-msg-bot agent-rich">';
+    (data.tool_calls || []).forEach(tc => {
+      html += _renderToolSonuc(tc.tool, tc.sonuc);
+    });
+    html += '</div>';
+    result.insertAdjacentHTML('beforeend', html);
+  } catch (e) {
+    const loadEl = result.querySelector('.agent-loading');
+    if (loadEl) loadEl.innerHTML = '❌ Hata: ' + e.message;
+  }
+  result.scrollTop = result.scrollHeight;
+}
+
+/* Çoklu tool çağrısı sırayla */
+async function agentDirectMulti(calls, baslik) {
+  const result = document.getElementById('agent-result');
+  result.style.display = 'block';
+  result.innerHTML =
+    `<div class="agent-msg agent-msg-user">👤 ${_esc(baslik)}</div>` +
+    `<div class="agent-msg agent-loading">⏳ Veriler getiriliyor…</div>`;
+  try {
+    const sonuclar = await Promise.all(calls.map(c =>
+      fetch('/api/agent/direct', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(c),
+      }).then(r => r.json())
+    ));
+    const loadEl = result.querySelector('.agent-loading');
+    if (loadEl) loadEl.remove();
+    let html = '<div class="agent-msg agent-msg-bot agent-rich">';
+    sonuclar.forEach(d => {
+      (d.tool_calls || []).forEach(tc => {
+        html += _renderToolSonuc(tc.tool, tc.sonuc);
+      });
+    });
+    html += '</div>';
+    result.insertAdjacentHTML('beforeend', html);
+  } catch (e) {
+    const loadEl = result.querySelector('.agent-loading');
+    if (loadEl) loadEl.innerHTML = '❌ Hata: ' + e.message;
+  }
+  result.scrollTop = result.scrollHeight;
 }
 
 function agentSoru() {

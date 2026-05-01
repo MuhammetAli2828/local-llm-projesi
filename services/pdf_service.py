@@ -108,31 +108,35 @@ def _p1_overlay(c, d):
     sv = lambda k: str(d.get(k) or "")
 
     # ── PARAGRAF: dönem, tarih/gün ──────────────────────────────────────────
-    # Yeni şablon (rl_y baseline):
-    #   "Güz/Bahar" prefix dots: rl_y=691.6, x=258.6 → "...." kısmı 258-285
-    #   ".../.../202.. ile" baslangic: rl_y=670.9, x=496.4
-    #   ".../.../202.." bitis:  rl_y=650.2, x=36.0
-    #   "…… …… günü" gun:        rl_y=650.2, x=173.5 - 226
+    # Placeholder TAM YÜKSEKLİK: y_alt=baseline → y_üst=baseline+12pt
+    # White rect'in placeholder'ı tamamen örtmesi için:
+    #   bit/gun: baseline 650 → text 650-662 → rect y=649, h=15
+    #   bas:     baseline 671 → text 671-683 → rect y=670, h=15
+    #   donem:   baseline 692 → text 692-704 → rect y=691, h=15
+    # Donem dot'ları: 5 ellipsis x=258.6-318.0 (G of Güz/Bahar at 318.8)
+    # Bas dots:       x=496-541 ("ile" at 547)
+    # Bit dots:       x=36-83
+    # Gun dots:       x=173-210 (iki '…… ……' grubu, 'g'ünü at 213)
     donem = sv("donem")
     if donem:
         c.setFillColorRGB(1, 1, 1)
-        c.rect(256, 689, 28, 11, fill=1, stroke=0)
-        _val(c, 259, 692, donem, 8.5)
+        c.rect(256, 689, 64, 17, fill=1, stroke=0)
+        _val(c, 261, 692, donem, 11)
     bas = sv("baslangic_tarihi")
     bit = sv("bitis_tarihi")
     gun = sv("staj_gun_sayisi")
     if bas:
         c.setFillColorRGB(1, 1, 1)
-        c.rect(493, 668, 50, 12, fill=1, stroke=0)
-        _val(c, 496, 671, bas, 8.5)
+        c.rect(493, 668, 53, 17, fill=1, stroke=0)
+        _val(c, 496, 671, bas, 10)
     if bit:
         c.setFillColorRGB(1, 1, 1)
-        c.rect(33, 647, 52, 12, fill=1, stroke=0)
-        _val(c, 36, 650, bit, 8.5)
+        c.rect(33, 647, 55, 17, fill=1, stroke=0)
+        _val(c, 36, 650, bit, 10)
     if gun:
         c.setFillColorRGB(1, 1, 1)
-        c.rect(170, 647, 42, 12, fill=1, stroke=0)
-        _val(c, 173, 650, str(gun), 8.5)
+        c.rect(171, 647, 42, 17, fill=1, stroke=0)
+        _val(c, 178, 650, str(gun), 10)
     c.setFillGray(0)
 
     # ── ÖĞRENCİ ALANLARI ──────────────────────────────────────────────────────
@@ -180,11 +184,12 @@ def _p1_overlay(c, d):
     _val(c, 490, Y_S6, sv("firma_fax"))
 
     # ── DEPARTMAN CHECK'LERİ ──────────────────────────────────────────────────
-    # Yeni şablon (rl_baseline):
-    #   ÜRETİM/...:      rl_y=280.6
-    #   PAZARLAMA/...:   rl_y=259.0
-    #   MUH./FİN./...:   rl_y=238.1
-    #   diğer:           rl_y=217.6
+    # Tablo cell yapısı (chars analizi):
+    #   Col1 cb cell: x=117-152, center x=135
+    #   Col2 cb cell: x=251-286, center x=268
+    #   Col3 (YÖNETİCİ/MUH/TEKNİKER) sayı:  x=393
+    #   Col4 (USTA/TEKNİSYEN/İŞÇİ)    sayı:  x=534
+    # Row baselines: ÜRETİM=281, PAZARLAMA=259, MUH/FİN=238, diğer=218
     DROWS = [
         (281, "d_uretim",    "p_yonetici", "p_usta"),
         (259, "d_pazarlama", "p_muhendis",  "p_teknisyen"),
@@ -198,32 +203,40 @@ def _p1_overlay(c, d):
         (218, "d_diger2"),
     ]
     for y_, k1, k3, k4 in DROWS:
-        _chk(c, 115, y_ + 1, bool(d.get(k1)))
+        _chk(c, 132, y_ - 2, bool(d.get(k1)))
         _val(c, 393, y_, sv(k3), 8)
         _val(c, 534, y_, sv(k4), 8)
     for y_, k2 in DROWS2:
-        _chk(c, 250, y_ + 1, bool(d.get(k2)))
+        _chk(c, 265, y_ - 2, bool(d.get(k2)))
 
     # ── İMKANLAR CHECK'LERİ ───────────────────────────────────────────────────
-    # Yeni şablon (rl_baseline):
-    #   Ücret/Yemek/Fotoğraf/Nüfus: rl_y=148.7
-    #   Servis/Savcılık:            rl_y=135.0
+    # Cell yapısı (chars analizi y=149 ve y=135):
+    #   Ücret cb:    x=117-144, center x=130
+    #   Yemek cb:    x=216-245, center x=230
+    #   Fotoğraf cb: x=421-452, center x=436
+    #   Nüfus cb:    x sonu (~545)
+    #   Servis cb:   x=130 (Ücret altı)
+    #   Savcılık cb: x=436 (Fotoğraf altı)
     Y_I1 = 149
     Y_I2 = 135
 
-    _chk(c, 90,  Y_I1 + 1, bool(d.get("ucret")))
-    _chk(c, 195, Y_I1 + 1, bool(d.get("yemek")))
-    _chk(c, 415, Y_I1 + 1, bool(d.get("fotograf")))
-    _chk(c, 535, Y_I1 + 1, bool(d.get("nufus_cuzdani")))
-    _chk(c, 90,  Y_I2 + 1, bool(d.get("servis")))
-    _chk(c, 415, Y_I2 + 1, bool(d.get("savcilik_belgesi")))
+    _chk(c, 127, Y_I1 - 2, bool(d.get("ucret")))
+    _chk(c, 227, Y_I1 - 2, bool(d.get("yemek")))
+    _chk(c, 433, Y_I1 - 2, bool(d.get("fotograf")))
+    _chk(c, 545, Y_I1 - 2, bool(d.get("nufus_cuzdani")))
+    _chk(c, 127, Y_I2 - 2, bool(d.get("servis")))
+    _chk(c, 433, Y_I2 - 2, bool(d.get("savcilik_belgesi")))
 
 
 # ── SAYFA 2 – Sadece değerler ─────────────────────────────────────────────────
 def _p2_overlay(c, d):
+    """Yeni şablon koordinatları (chars analizinden):
+       Adı Soyadı  ":" → x=159, baseline y=677
+       Görev ve Unvanı ":" → x=159, baseline y=654
+    """
     sv = lambda k: str(d.get(k) or "")
-    _val(c, 118, 729, sv("isveren_ad_soyad"))
-    _val(c, 132, 711, sv("isveren_unvan"))
+    _val(c, 165, 677, sv("isveren_ad_soyad"), 9)
+    _val(c, 165, 654, sv("isveren_unvan"), 9)
 
 
 # ── SIFIRDAN PDF (fallback) ───────────────────────────────────────────────────

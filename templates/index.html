@@ -328,17 +328,17 @@
             <div class="agent-panel-sub">Başvurularınızı otomatik analiz eder ve yönetir</div>
           </div>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="agentHizli('Bekleyen başvuruları önceliğe göre sırala, risk durumunu değerlendir ve kısa özet ver')">▶ Otomatik Analiz</button>
+        <button class="btn btn-primary btn-sm" onclick="agentDirect('ONCELIK', {}, '▶ Otomatik Analiz: Öncelik sıralaması')">▶ Otomatik Analiz</button>
       </div>
       <div class="agent-actions">
-<button class="agent-action-btn" onclick="agentHizli('Toplam, kabul, red ve bekleyen sayıları ile oranları içeren durum özetini ver')">
+        <button class="agent-action-btn" onclick="agentDirect('ISTATISTIK', {tip:'ozet'}, '📊 Durum Özeti')">
           <span class="agent-action-icon">📊</span>
           <div>
             <div class="agent-action-title">Durum Özeti</div>
             <div class="agent-action-sub">Güncel istatistikler</div>
           </div>
         </button>
-        <button class="agent-action-btn" onclick="agentHizli('En çok başvuru gelen firmaları ve bölüm dağılımını listele')">
+        <button class="agent-action-btn" onclick="agentDirectMulti([{tool:'ISTATISTIK',input:{tip:'firma'}},{tool:'ISTATISTIK',input:{tip:'bolum'}}], '🏢 Firma & Bölüm Dağılımı')">
           <span class="agent-action-icon">🏢</span>
           <div>
             <div class="agent-action-title">Firma & Bölüm</div>
@@ -349,7 +349,7 @@
           <span class="agent-action-icon">💬</span>
           <div>
             <div class="agent-action-title">Soru Sor</div>
-            <div class="agent-action-sub">Asistana bir şey sor</div>
+            <div class="agent-action-sub">LLM ile doğal dilde komut</div>
           </div>
         </button>
       </div>
