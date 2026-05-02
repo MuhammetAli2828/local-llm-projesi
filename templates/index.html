@@ -375,6 +375,7 @@
     <div class="sek-tabs">
       <button class="sek-tab active" onclick="sekmeAc(this,'basvurular')">📋 Başvurular</button>
       <button class="sek-tab" onclick="sekmeAc(this,'raporlar')">📝 Staj Raporları</button>
+      <button class="sek-tab" onclick="sekmeAc(this,'dokumanlar')">📚 Yönerge & Dökümanlar</button>
     </div>
 
     <!-- BAŞVURU LİSTESİ -->
@@ -385,6 +386,72 @@
     <!-- RAPOR LİSTESİ -->
     <div id="tab-raporlar" class="sek-list" style="display:none">
       <div class="empty-state">⏳ Yükleniyor…</div>
+    </div>
+
+    <!-- YÖNERGE & DÖKÜMANLAR -->
+    <div id="tab-dokumanlar" class="sek-list" style="display:none">
+      <!-- ANA YÖNERGE GÜNCELLEME KARTI -->
+      <div class="dok-card dok-yonerge-card">
+        <div class="dok-card-head">
+          <span>📜 Ana Yönerge (yonerge.pdf)</span>
+          <span id="dok-yonerge-badge" class="dok-badge">—</span>
+        </div>
+        <div class="dok-card-body">
+          <!-- Mevcut yönerge bilgisi + indir/görüntüle -->
+          <div class="yonerge-mevcut">
+            <div class="yonerge-mevcut-info">
+              <span class="yonerge-mevcut-icon">📄</span>
+              <div>
+                <div class="yonerge-mevcut-baslik">Şu an aktif yönerge</div>
+                <div id="yonerge-mevcut-meta" class="yonerge-mevcut-meta">—</div>
+              </div>
+            </div>
+            <div class="yonerge-mevcut-aksiyon">
+              <a href="/api/docs/view/yonerge.pdf" target="_blank" class="btn btn-outline btn-sm">
+                👁️ Görüntüle
+              </a>
+              <a href="/api/docs/view/yonerge.pdf?indir=1" class="btn btn-outline btn-sm">
+                ⬇️ İndir
+              </a>
+            </div>
+          </div>
+
+          <p class="dok-aciklama">
+            Yeni bir PDF ile yönergeyi <strong>güncelleyebilirsiniz</strong>.
+            Güncelleme sonrasında öğrenciler ve chat asistanı <strong>anında yeni yönergeden</strong> bilgi alır.
+            Eski yönerge otomatik yedeklenir.
+          </p>
+          <div class="dok-yukle-row">
+            <input type="file" id="yonerge-file" accept=".pdf" hidden>
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('yonerge-file').click()">
+              📂 Yeni Yönerge Seç
+            </button>
+            <span id="yonerge-file-name" class="file-name">Dosya seçilmedi</span>
+            <button id="btn-yonerge-update" class="btn btn-primary btn-sm" onclick="yonergeGuncelle()" disabled>
+              ⬆️ Yönergeyi Güncelle
+            </button>
+          </div>
+          <div id="yonerge-result" class="yonerge-result" style="display:none"></div>
+        </div>
+      </div>
+
+      <!-- EK DÖKÜMANLAR -->
+      <div class="dok-card">
+        <div class="dok-card-head">
+          <span>📑 Ek Dökümanlar</span>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('dok-file').click()">
+            ➕ Yeni Doküman Ekle
+          </button>
+          <input type="file" id="dok-file" accept=".pdf" hidden onchange="dokYukle(this)">
+        </div>
+        <div class="dok-card-body">
+          <p class="dok-aciklama">
+            Staj takvimi, ek bilgilendirme veya duyuru gibi PDF'leri ekleyebilirsiniz.
+            Bu dökümanlar da chat asistanının yanıtlarına dahil olur.
+          </p>
+          <div id="dok-list" class="dok-list">Yükleniyor…</div>
+        </div>
+      </div>
     </div>
 
   </div>

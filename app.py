@@ -706,14 +706,36 @@ def api_chat():
     )
 
     sistem = (
-        "Sen Amasya MYO Staj Başvuru Asistanısın. Öğrencilerin staj süreci hakkındaki sorularını "
-        "Türkçe, kısa ve net biçimde yanıtlarsın.\n\n"
-        "ÖNEMLİ KURALLAR:\n"
-        "1) Cevaplarını her zaman önce verilen YÖNERGE bölümlerine ve aktif STAJ DÖNEMİ bilgilerine dayandır.\n"
-        "2) Tarih/staj süresi/dönem soruları → mutlaka aşağıdaki STAJ DÖNEMİ bilgisini kullan, başka tarih uydurma.\n"
-        "3) Yönergede yoksa ya da bilmiyorsan 'Yönergede bu konuda kesin bilgi bulamadım' de — uydurma!\n"
-        "4) Mümkünse yanıtlarken yönergedeki madde numarasını ya da bölümünü belirt.\n"
-        "5) 'Yaz dönemi' (yaz tatili) ve 'Ara dönem' (bahar/yarıyıl tatili) ayırımına dikkat — kullanıcı hangisini sorduysa o döneme göre cevap ver.\n\n"
+        "Sen Amasya MYO Staj Başvuru Asistanısın. Öğrencilerin sorularını AKICI, "
+        "AÇIKLAYICI ve DOĞAL bir Türkçe ile yanıtlarsın. Robotik liste değil, "
+        "anlaşılır bir paragraf akışında konuşursun.\n\n"
+        "YANIT KURALLARI:\n"
+        "• Cevabını en az 3-5 cümleden oluşan AKICI bir metin olarak ver.\n"
+        "• Aynı tarihi/sayıyı/kuralı ASLA tekrar etme — her cümle yeni bilgi katsın.\n"
+        "• Madde numarasını yanıtın SADECE SONUNDA bir kez 📌 ile belirt.\n"
+        "• İstersen 1 emoji/işaret kullanarak vurgu yapabilirsin.\n"
+        "• Markdown başlık (##) KULLANMA, sadece **kalın** ile vurgu yapabilirsin.\n"
+        "• Liste yerine düz metin paragrafı tercih et (gerçekten 3+ kalem yoksa).\n\n"
+        "BÖLÜMLER (zorunlu DEĞİL — doğal akışta dağıt):\n"
+        "1) Cevabın özü: kural/sayı/tarih.\n"
+        "2) Bağlam: Bu neden var, ne işe yarar, hangi durumda uygulanır.\n"
+        "3) Somut hayat örneği: Hayali bir öğrenci üzerinden 'mesela...' diye anlat.\n"
+        "4) Pratik tavsiye: Öğrenci ne yapmalı, neye dikkat etmeli.\n"
+        "5) Kaynak: 📌 Madde X-Y (en sonda).\n\n"
+        "İYİ YANIT ÖRNEĞİ (Devamsızlık sorusu):\n"
+        "'Stajınız sırasında yapabileceğiniz devamsızlık toplam staj süresinin **%10**'unu aşamaz. "
+        "Yani 60 iş günlük bir stajınız varsa yıl içinde en fazla 6 gün gelmeyebilirsiniz. "
+        "Bu oranı aşarsanız stajınız geçersiz sayılır ve bir sonraki dönemde yeniden başvurmanız gerekir. "
+        "Mazeretli devamsızlıklarda (sağlık raporu, resmi izin vs.) önceden staj koordinatörünüze haber vermeniz çok önemli; "
+        "aksi halde mazeret bile sayılmayabilir. Pratik tavsiye olarak staj defterinizde devam günlerinizi günü gününe işleyin. 📌 Madde 14-1'\n\n"
+        "KÖTÜ YANIT ÖRNEĞİ (yapma):\n"
+        "'**Doğrudan cevap:** %10. **Açıklama:** %10 demek %10 demektir. **Pratik örnek:** %10. **Kaynak:** Madde 14.'\n"
+        "(Tekrarlayan, robotik, içeriksiz — bunu YAPMA.)\n\n"
+        "KESİN KURALLAR:\n"
+        "- Her zaman YÖNERGE bölümlerine ve aktif STAJ DÖNEMİ bilgilerine dayandır.\n"
+        "- Tarih/süre soruları → sistem dönem bilgisini kullan, asla uydurma.\n"
+        "- Yönergede yoksa 'Bu konuda yönergede net bilgi yok, sekreterinize danışın' de.\n"
+        "- Yaz dönemi (yaz tatili) ile Ara dönem (yarıyıl/bahar) ayrı — karıştırma.\n\n"
         f"{donem_bilgi}"
     )
 
@@ -827,14 +849,48 @@ def api_chat():
 
     return jsonify({"yanit": yanit, "form_data": form_data})
 
+@app.route("/api/docs/view/<path:name>")
+def api_docs_view(name):
+    """PDF görüntüleme/indirme. yonerge.pdf veya docs/ altındaki dosya."""
+    # Güvenlik: dosya adında / veya .. olmasın
+    if "/" in name or ".." in name or "\\" in name:
+        return "Geçersiz dosya adı", 400
+    if name == "yonerge.pdf":
+        path = YONERGE
+    else:
+        path = DOCS / name
+    if not path.exists():
+        return "Dosya bulunamadı", 404
+    return send_file(str(path), mimetype="application/pdf",
+                     as_attachment=request.args.get("indir") == "1",
+                     download_name=name)
+
+
 @app.route("/api/docs", methods=["GET"])
 def api_docs_list():
     _, rag = load_services()
-    docs = [{"name": name, "chunks": count} for name, count in rag.list_documents()]
+    docs = []
+    for name, count in rag.list_documents():
+        if name == "yonerge.pdf":
+            path = YONERGE
+        else:
+            path = DOCS / name
+        size_kb = 0
+        guncel  = ""
+        if path.exists():
+            st = path.stat()
+            size_kb = st.st_size // 1024
+            guncel  = datetime.fromtimestamp(st.st_mtime).strftime("%d.%m.%Y %H:%M")
+        docs.append({
+            "name": name, "chunks": count, "size_kb": size_kb,
+            "guncel": guncel,
+            "is_yonerge": name == "yonerge.pdf",
+        })
     return jsonify({"ok": True, "docs": docs})
 
 
 @app.route("/api/docs/upload", methods=["POST"])
+@sekreter_required
 def api_docs_upload():
     file = request.files.get("pdf")
     if not file or not file.filename:
@@ -852,16 +908,74 @@ def api_docs_upload():
         return jsonify({"ok": False, "hata": "PDF'den metin okunamadı"}), 400
 
     _, rag = load_services()
+    # Aynı isimde varsa önce kaldır
+    rag.remove_document(file.filename)
     rag.add_document(file.filename, text)
-    return jsonify({"ok": True, "dosya": file.filename})
+    return jsonify({"ok": True, "dosya": file.filename, "chunks": len(text)//600 + 1})
+
+
+@app.route("/api/docs/yonerge-update", methods=["POST"])
+@sekreter_required
+def api_docs_yonerge_update():
+    """Ana yönergeyi (yonerge.pdf) günceller. Eski içerik RAG'den kaldırılır,
+    yeni içerik aynı isimle eklenir."""
+    file = request.files.get("pdf")
+    if not file or not file.filename:
+        return jsonify({"ok": False, "hata": "Dosya seçilmedi"}), 400
+    if not file.filename.lower().endswith(".pdf"):
+        return jsonify({"ok": False, "hata": "Yalnızca PDF kabul edilir"}), 400
+
+    from services.pdf_service import extract_pdf_text
+
+    # Önce metni çıkarabiliyor muyuz kontrol et — ana yönergeyi geçici dosyaya kaydet
+    import tempfile, shutil
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        file.save(tmp.name)
+        tmp_path = tmp.name
+    text = extract_pdf_text(tmp_path)
+    if not text.strip():
+        try: os.unlink(tmp_path)
+        except: pass
+        return jsonify({"ok": False, "hata": "PDF'den metin okunamadı, geçerli bir yönerge yükleyin"}), 400
+
+    # Eski yönergeyi yedekle (yonerge_eski_YYYYMMDD_HHMMSS.pdf)
+    if YONERGE.exists():
+        yedek_ad = f"yonerge_eski_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        try:
+            shutil.copy2(str(YONERGE), str(BASE / yedek_ad))
+        except Exception as e:
+            print(f"[Yönerge yedek] {e}")
+
+    # Yeni yönergeyi ana konuma yaz
+    shutil.move(tmp_path, str(YONERGE))
+
+    # RAG'ten eski yonerge.pdf chunk'larını kaldır + yenisini ekle
+    _, rag = load_services()
+    rag.remove_document("yonerge.pdf")
+    rag.add_document("yonerge.pdf", text)
+
+    # Kurallar cache'ini de geçersiz kıl
+    global _KURALLAR_CACHE
+    _KURALLAR_CACHE = {"data": None, "ts": 0, "key": None}
+
+    chunk_say = sum(1 for _ in rag.search("staj", top_k=100))  # yaklaşık
+    return jsonify({
+        "ok": True,
+        "mesaj": "Yönerge güncellendi. Öğrenciler artık yeni yönergeden yanıt alacak.",
+        "boyut_kb": len(text.encode('utf-8')) // 1024,
+        "karakter": len(text),
+    })
 
 
 @app.route("/api/docs/delete", methods=["POST"])
+@sekreter_required
 def api_docs_delete():
     data = request.get_json(force=True) or {}
     name = data.get("name", "")
-    if not name or name == "yonerge.pdf":
-        return jsonify({"ok": False, "hata": "Bu doküman silinemez"}), 400
+    if not name:
+        return jsonify({"ok": False, "hata": "Dosya adı eksik"}), 400
+    if name == "yonerge.pdf":
+        return jsonify({"ok": False, "hata": "Ana yönerge silinemez. Güncellemek için 'Yönergeyi Güncelle' kullanın."}), 400
 
     pdf_path = DOCS / name
     pdf_path.unlink(missing_ok=True)

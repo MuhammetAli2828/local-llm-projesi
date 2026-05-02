@@ -302,6 +302,23 @@ body {
   font-size: .82rem; font-style: italic;
 }
 
+/* Markdown render (chat içeriği) */
+.chat-msg p { margin: 0 0 8px; line-height: 1.55; }
+.chat-msg p:last-child { margin-bottom: 0; }
+.chat-msg .md-h {
+  font-weight: 700; font-size: .9rem; color: var(--primary-d);
+  margin: 8px 0 4px;
+}
+.chat-msg .md-list { margin: 4px 0 8px; padding-left: 20px; }
+.chat-msg .md-list li { margin-bottom: 3px; line-height: 1.5; }
+.chat-msg strong { font-weight: 700; color: var(--gray-800); }
+.chat-msg em { font-style: italic; }
+.chat-msg code {
+  background: rgba(79,70,229,.08); color: var(--primary-d);
+  padding: 1px 6px; border-radius: 4px; font-size: .82em;
+  font-family: ui-monospace, monospace;
+}
+
 /* ── DÖNEM BANNERI ─────────────────────────────────────────────────────────── */
 .donem-banner {
   background: linear-gradient(90deg, #1d4ed8 0%, #4f46e5 50%, #7c3aed 100%);
@@ -809,6 +826,79 @@ body {
   border-radius: 50%; position: absolute; top: 14px; right: 14px; flex-shrink: 0;
 }
 .notif-empty { padding: 24px; text-align: center; color: var(--gray-400); font-size: .88rem; }
+
+/* ── DÖKÜMAN YÖNETİMİ (sekreter) ───────────────────────────────────────────── */
+.dok-card {
+  background: #fff; border-radius: 12px; box-shadow: var(--shadow);
+  border: 1px solid var(--gray-200); margin-bottom: 14px;
+  overflow: hidden;
+}
+.dok-yonerge-card { border-left: 4px solid var(--primary); }
+.dok-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  background: linear-gradient(90deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid var(--gray-200);
+  font-weight: 700; font-size: .92rem; color: var(--primary-d);
+  flex-wrap: wrap; gap: 8px;
+}
+.dok-badge {
+  background: var(--primary-l); color: var(--primary-d);
+  padding: 3px 10px; border-radius: 12px;
+  font-size: .72rem; font-weight: 700; font-family: monospace;
+}
+.dok-card-body { padding: 14px 16px; }
+.dok-aciklama {
+  font-size: .82rem; color: var(--gray-600); line-height: 1.5;
+  margin-bottom: 12px;
+}
+.dok-yukle-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--gray-50); padding: 10px 12px; border-radius: 8px;
+}
+.dok-yukle-row .file-name {
+  font-size: .82rem; color: var(--gray-600); flex: 1; min-width: 100px;
+}
+.yonerge-result {
+  margin-top: 10px; padding: 10px 14px; border-radius: 8px;
+  font-size: .85rem; line-height: 1.5;
+}
+.yonerge-result.success { background: var(--success-l); color: #065f46; border-left: 3px solid var(--success); }
+.yonerge-result.error   { background: var(--danger-l);  color: #991b1b; border-left: 3px solid var(--danger); }
+.yonerge-result.info    { background: var(--info-l);    color: #1e40af; border-left: 3px solid #3b82f6; }
+
+.dok-list { display: flex; flex-direction: column; gap: 8px; }
+.dok-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px; background: var(--gray-50);
+  border-radius: 8px; border: 1px solid var(--gray-200);
+  gap: 10px; flex-wrap: wrap;
+}
+.dok-row:hover { border-color: var(--primary); background: #eef2ff; }
+.dok-info { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 200px; }
+.dok-icon { font-size: 1.4rem; }
+.dok-name { font-weight: 700; font-size: .87rem; color: var(--gray-800); word-break: break-all; }
+.dok-meta { font-size: .72rem; color: var(--gray-400); margin-top: 2px; font-family: monospace; }
+.dok-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.dok-empty { text-align: center; padding: 20px; color: var(--gray-400); font-size: .85rem; }
+
+/* Mevcut yönerge bilgi kutusu */
+.yonerge-mevcut {
+  display: flex; align-items: center; justify-content: space-between;
+  background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%);
+  border: 1.5px solid #c7d2fe; border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 14px;
+  flex-wrap: wrap; gap: 12px;
+}
+.yonerge-mevcut-info { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 240px; }
+.yonerge-mevcut-icon { font-size: 1.8rem; }
+.yonerge-mevcut-baslik {
+  font-size: .82rem; font-weight: 700; color: var(--primary-d);
+}
+.yonerge-mevcut-meta {
+  font-size: .76rem; color: var(--gray-600); margin-top: 2px;
+}
+.yonerge-mevcut-aksiyon { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* ── SEKMELER (sekreter) ───────────────────────────────────────────────────── */
 .sek-tabs { display: flex; gap: 6px; }

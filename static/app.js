@@ -298,13 +298,39 @@ const chatSend     = document.getElementById('chat-send');
 let _chatHistory   = [];
 
 function mdToHtml(text) {
-  return text
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/^#{1,3}\s+(.+)$/gm, '<b>$1</b>')
-    .replace(/^- (.+)$/gm, '• $1')
-    .replace(/\n/g, '<br>');
+  if (!text) return '';
+  // 1) HTML escape
+  let h = String(text)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // 2) Code inline `kod`
+  h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // 3) Bold/italic
+  h = h.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  h = h.replace(/(?<![*\w])\*([^*\n]+)\*(?!\w)/g, '<em>$1</em>');
+  // 4) Headings ##/### → kalın küçük başlık
+  h = h.replace(/^###?\s+(.+)$/gm, '<div class="md-h">$1</div>');
+  // 5) Numaralı liste 1. ... → <li>
+  h = h.replace(/^\s*\d+\.\s+(.+)$/gm, '<li class="md-ol">$1</li>');
+  // 6) Madde işaretli liste - veya • → <li>
+  h = h.replace(/^\s*[-•]\s+(.+)$/gm, '<li class="md-ul">$1</li>');
+  // 7) Ardışık <li>'leri grupla
+  h = h.replace(/(<li class="md-ol">.*?<\/li>(?:\s*<li class="md-ol">.*?<\/li>)+)/gs,
+                m => '<ol class="md-list">' + m.replace(/ class="md-ol"/g,'') + '</ol>');
+  h = h.replace(/(<li class="md-ul">.*?<\/li>(?:\s*<li class="md-ul">.*?<\/li>)+)/gs,
+                m => '<ul class="md-list">' + m.replace(/ class="md-ul"/g,'') + '</ul>');
+  // Tek <li>'leri de sar
+  h = h.replace(/<li class="md-ol">(.+?)<\/li>/g, '<ol class="md-list"><li>$1</li></ol>');
+  h = h.replace(/<li class="md-ul">(.+?)<\/li>/g, '<ul class="md-list"><li>$1</li></ul>');
+  // 8) Paragraflar — boş satırlar paragraf ayırır
+  const paragraflar = h.split(/\n\n+/);
+  h = paragraflar.map(p => {
+    p = p.trim();
+    if (!p) return '';
+    // Zaten blok eleman varsa <p> ekleme
+    if (/^<(ol|ul|div|blockquote)/.test(p)) return p;
+    return '<p>' + p.replace(/\n/g, '<br>') + '</p>';
+  }).join('');
+  return h;
 }
 
 function appendMsg(text, role, isHtml = false) {
@@ -911,7 +937,170 @@ function sekmeAc(btn, sekme) {
   btn.classList.add('active');
   document.getElementById('tab-basvurular').style.display = sekme === 'basvurular' ? 'flex' : 'none';
   document.getElementById('tab-raporlar').style.display   = sekme === 'raporlar'   ? 'flex' : 'none';
-  if (sekme === 'raporlar') loadRaporlar();
+  const dokTab = document.getElementById('tab-dokumanlar');
+  if (dokTab) dokTab.style.display = sekme === 'dokumanlar' ? 'flex' : 'none';
+  if (sekme === 'raporlar')   loadRaporlar();
+  if (sekme === 'dokumanlar') loadDokumanlar();
+}
+
+/* ── DÖKÜMAN YÖNETİMİ ─────────────────────────────────────────────────────── */
+async function loadDokumanlar() {
+  const list = document.getElementById('dok-list');
+  const yonergeBadge = document.getElementById('dok-yonerge-badge');
+  const yonergeMeta  = document.getElementById('yonerge-mevcut-meta');
+  if (!list) return;
+  list.innerHTML = '⏳ Yükleniyor…';
+  try {
+    const res = await fetch('/api/docs');
+    const data = await res.json();
+    const docs = data.docs || [];
+    const yonerge = docs.find(d => d.is_yonerge);
+    if (yonerge) {
+      if (yonergeBadge) yonergeBadge.textContent = `${yonerge.chunks} chunk · ${yonerge.size_kb} KB`;
+      if (yonergeMeta) {
+        yonergeMeta.innerHTML =
+          `<strong>${yonerge.size_kb} KB</strong> · ` +
+          `<strong>${yonerge.chunks}</strong> chunk` +
+          (yonerge.guncel ? ` · son güncelleme: <strong>${yonerge.guncel}</strong>` : '');
+      }
+    }
+    const ekler = docs.filter(d => !d.is_yonerge);
+    if (ekler.length === 0) {
+      list.innerHTML = '<div class="dok-empty">📭 Henüz ek doküman yok.</div>';
+      return;
+    }
+    list.innerHTML = ekler.map(d => `
+      <div class="dok-row">
+        <div class="dok-info">
+          <span class="dok-icon">📄</span>
+          <div>
+            <div class="dok-name">${_esc(d.name)}</div>
+            <div class="dok-meta">${d.chunks} chunk · ${d.size_kb} KB${d.guncel ? ' · ' + d.guncel : ''}</div>
+          </div>
+        </div>
+        <div class="dok-actions">
+          <a href="/api/docs/view/${encodeURIComponent(d.name)}" target="_blank" class="btn btn-outline btn-sm" title="Görüntüle">👁️</a>
+          <a href="/api/docs/view/${encodeURIComponent(d.name)}?indir=1" class="btn btn-outline btn-sm" title="İndir">⬇️</a>
+          <button class="btn btn-danger btn-sm" onclick="dokSil('${_esc(d.name)}')" title="Sil">🗑️</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    list.innerHTML = '<div class="dok-empty">❌ Yüklenemedi: ' + e.message + '</div>';
+  }
+}
+
+const yonergeFile = document.getElementById('yonerge-file');
+if (yonergeFile) {
+  yonergeFile.addEventListener('change', () => {
+    const f = yonergeFile.files[0];
+    document.getElementById('yonerge-file-name').textContent = f ? f.name : 'Dosya seçilmedi';
+    document.getElementById('btn-yonerge-update').disabled = !f;
+  });
+}
+
+async function yonergeGuncelle() {
+  const f = document.getElementById('yonerge-file').files[0];
+  if (!f) return;
+  const result = document.getElementById('yonerge-result');
+  const btn = document.getElementById('btn-yonerge-update');
+  btn.disabled = true; btn.innerHTML = '<span class="spin">⏳</span> Güncelleniyor…';
+  result.style.display = 'block';
+  result.className = 'yonerge-result info';
+  result.textContent = '⏳ Yönerge yükleniyor ve indeksleniyor…';
+  const fd = new FormData();
+  fd.append('pdf', f);
+  try {
+    const res = await fetch('/api/docs/yonerge-update', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.ok) {
+      result.className = 'yonerge-result success';
+      result.innerHTML = `✅ <strong>${data.mesaj}</strong><br>Boyut: ${data.boyut_kb} KB · ${data.karakter} karakter`;
+      showToast('✅ Yönerge güncellendi!');
+      loadDokumanlar();
+      // Yönerge değiştiyse kuralları da yenile
+      if (typeof loadKurallar === 'function') loadKurallar();
+    } else {
+      result.className = 'yonerge-result error';
+      result.textContent = '❌ ' + (data.hata || 'Hata');
+    }
+  } catch (e) {
+    result.className = 'yonerge-result error';
+    result.textContent = '❌ Bağlantı hatası: ' + e.message;
+  } finally {
+    btn.disabled = false; btn.innerHTML = '⬆️ Yönergeyi Güncelle';
+    document.getElementById('yonerge-file-name').textContent = 'Dosya seçilmedi';
+    document.getElementById('yonerge-file').value = '';
+  }
+}
+
+async function dokYukle(input) {
+  const f = input.files[0];
+  if (!f) return;
+  const fd = new FormData();
+  fd.append('pdf', f);
+  showToast('⏳ Doküman yükleniyor…');
+  try {
+    const res = await fetch('/api/docs/upload', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.ok) {
+      showToast(`✅ ${data.dosya} eklendi`);
+      loadDokumanlar();
+    } else {
+      showToast('❌ ' + (data.hata || 'Hata'));
+    }
+  } catch (e) { showToast('❌ ' + e.message); }
+  input.value = '';
+}
+
+/* PDF görüntüle — yeni pencerede aç (Simple Browser dışına çıkmayı zorla) */
+function dokGoruntule(url) {
+  // window.open ile yeni pencere — VS Code Simple Browser bunu çoğunlukla
+  // dışarı (gerçek tarayıcıya) yönlendirir
+  const win = window.open(url, '_blank', 'noopener,noreferrer');
+  if (!win) {
+    // Popup engellendiyse: link kopyala
+    navigator.clipboard?.writeText(window.location.origin + url);
+    showToast('🔗 Link panoya kopyalandı, tarayıcıya yapıştır');
+  }
+}
+
+/* PDF indir — Blob olarak fetch edip <a download> ile indirme tetikle */
+async function dokIndir(url, dosyaAdi) {
+  showToast('⏳ İndiriliyor…');
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Dosya bulunamadı');
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = dosyaAdi || 'dokuman.pdf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    showToast('✅ İndirildi: ' + (dosyaAdi || 'dokuman.pdf'));
+  } catch (e) {
+    showToast('❌ İndirme hatası: ' + e.message);
+  }
+}
+
+async function dokSil(name) {
+  if (!confirm(`"${name}" dosyasını silmek istediğinize emin misiniz?`)) return;
+  try {
+    const res = await fetch('/api/docs/delete', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({name}),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast('🗑️ Silindi');
+      loadDokumanlar();
+    } else {
+      showToast('❌ ' + (data.hata || 'Hata'));
+    }
+  } catch (e) { showToast('❌ ' + e.message); }
 }
 
 /* ── BİLDİRİMLER ──────────────────────────────────────────────────────────── */
