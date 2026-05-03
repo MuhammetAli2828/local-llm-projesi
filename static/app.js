@@ -372,63 +372,123 @@ async function sendChat() {
   if (chips) chips.style.display = 'none';
   appendMsg(soru, 'user');
   _chatHistory.push({ role: 'user', content: soru });
-  const typing = appendMsg('⏳ Yanıt yazılıyor…', 'bot typing');
+  const typing = appendMsg('▌', 'bot typing');
   chatSend.disabled = true;
+
+  // 1) Streaming ile token-by-token yanıt
+  let tamYanit = '';
   try {
-    const res  = await fetch('/api/chat', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+    const res = await fetch('/api/chat-stream', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ soru, gecmis: _chatHistory.slice(0,-1) }),
     });
-    const data = await res.json();
-    const isHata = (data.yanit || '').toLowerCase().startsWith('ollama hatası');
-    typing.innerHTML = mdToHtml(data.yanit);
-    typing.classList.remove('typing');
-    if (isHata) typing.classList.add('chat-msg-error');
-    if (!isHata) _chatHistory.push({ role: 'assistant', content: data.yanit });
-    if (_chatHistory.length > 20) _chatHistory = _chatHistory.slice(-20);
-
-    // Form alanı verisi geldiyse otomatik doldur (chat başarısız olduysa atlanır)
-    if (!isHata && data.form_data && Object.keys(data.form_data).length > 0) {
-      const ALAN_ADLARI = {
-        baslangic_tarihi: 'Başlangıç',
-        bitis_tarihi:     'Bitiş',
-        staj_gun_sayisi:  'Staj Günü',
-        firma_adi:        'Firma Adı',
-        firma_adresi:     'Firma Adresi',
-        hizmet_alani:     'Hizmet Alanı',
-        bolum:            'Bölüm',
-        ad_soyad:         'Ad Soyad',
-        ogrenci_no:       'Öğrenci No',
-        tc_kimlik_no:     'TC Kimlik',
-      };
-      const satirlar = [];
-      Object.entries(data.form_data).forEach(([key, val]) => {
-        const el = document.getElementById(key);
-        if (el) {
-          el.value = val;
-          // Yeşil highlight animasyonu
-          el.classList.add('autofill-flash');
-          setTimeout(() => el.classList.remove('autofill-flash'), 2000);
-          const etiket = ALAN_ADLARI[key] || key;
-          const gosterim = key.includes('tarih') ? val.split('-').reverse().join('.') : val;
-          satirlar.push(`<span class="autofill-row"><span class="autofill-key">${etiket}:</span> <span class="autofill-val">${gosterim}</span></span>`);
-        }
-      });
-      if (satirlar.length) {
-        hesaplaTarih();
-        runValidate();
-        const bilgi = document.createElement('div');
-        bilgi.className = 'chat-msg bot autofill-msg';
-        bilgi.innerHTML = `<div class="autofill-head">🤖 Form otomatik dolduruldu</div>${satirlar.join('')}`;
-        chatMessages.appendChild(bilgi);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+    if (!res.ok || !res.body) throw new Error('stream-yok');
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop() || '';
+      for (const p of parts) {
+        const line = p.trim();
+        if (!line.startsWith('data:')) continue;
+        const payload = line.slice(5).trim();
+        if (payload === '[DONE]') break;
+        try {
+          const obj = JSON.parse(payload);
+          if (obj.t) {
+            tamYanit += obj.t;
+            typing.innerHTML = mdToHtml(tamYanit) + '<span class="cursor-blink">▌</span>';
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+          } else if (obj.err) {
+            tamYanit = 'Ollama hatası: ' + obj.err;
+          }
+        } catch {}
       }
     }
-  } catch {
-    typing.textContent = '❌ Bağlantı hatası.';
-  } finally {
-    chatSend.disabled = false;
+    typing.innerHTML = mdToHtml(tamYanit);
+    typing.classList.remove('typing');
+  } catch (e) {
+    // Fallback: eski non-stream endpoint
+    try {
+      const res = await fetch('/api/chat', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ soru, gecmis: _chatHistory.slice(0,-1) }),
+      });
+      const d = await res.json();
+      tamYanit = d.yanit || '';
+      typing.innerHTML = mdToHtml(tamYanit);
+      typing.classList.remove('typing');
+    } catch {
+      typing.textContent = '❌ Bağlantı hatası.';
+      tamYanit = '';
+    }
   }
+
+  // Hata mı?
+  const isHata = tamYanit.toLowerCase().startsWith('ollama hatası') || tamYanit.startsWith('❌');
+  if (isHata) typing.classList.add('chat-msg-error');
+
+  // 2) History'e ekle
+  if (!isHata && tamYanit) _chatHistory.push({ role:'assistant', content: tamYanit });
+  if (_chatHistory.length > 20) _chatHistory = _chatHistory.slice(-20);
+
+  // 3) Form extraction — sadece soruda gerçek veri sinyali varsa (arka planda)
+  const data = { yanit: tamYanit, form_data: {} };
+  const SIGNAL = /\d{1,2}[\/.\-]\d{1,2}|\d{4}-\d{2}-\d{2}|ocak|şubat|mart|nisan|mayıs|haziran|temmuz|ağustos|eylül|ekim|kasım|aralık|firma|adres/i;
+  if (!isHata && SIGNAL.test(soru)) {
+    try {
+      const r2 = await fetch('/api/chat', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ soru, gecmis: [] }),
+      });
+      const d2 = await r2.json();
+      if (d2.form_data) data.form_data = d2.form_data;
+    } catch {}
+  }
+
+  // Form alanı verisi geldiyse otomatik doldur (chat başarısız olduysa atlanır)
+  if (!isHata && data.form_data && Object.keys(data.form_data).length > 0) {
+    const ALAN_ADLARI = {
+      baslangic_tarihi: 'Başlangıç',
+      bitis_tarihi:     'Bitiş',
+      staj_gun_sayisi:  'Staj Günü',
+      firma_adi:        'Firma Adı',
+      firma_adresi:     'Firma Adresi',
+      hizmet_alani:     'Hizmet Alanı',
+      bolum:            'Bölüm',
+      ad_soyad:         'Ad Soyad',
+      ogrenci_no:       'Öğrenci No',
+      tc_kimlik_no:     'TC Kimlik',
+    };
+    const satirlar = [];
+    Object.entries(data.form_data).forEach(([key, val]) => {
+      const el = document.getElementById(key);
+      if (el) {
+        el.value = val;
+        // Yeşil highlight animasyonu
+        el.classList.add('autofill-flash');
+        setTimeout(() => el.classList.remove('autofill-flash'), 2000);
+        const etiket = ALAN_ADLARI[key] || key;
+        const gosterim = key.includes('tarih') ? val.split('-').reverse().join('.') : val;
+        satirlar.push(`<span class="autofill-row"><span class="autofill-key">${etiket}:</span> <span class="autofill-val">${gosterim}</span></span>`);
+      }
+    });
+    if (satirlar.length) {
+      hesaplaTarih();
+      runValidate();
+      const bilgi = document.createElement('div');
+      bilgi.className = 'chat-msg bot autofill-msg';
+      bilgi.innerHTML = `<div class="autofill-head">🤖 Form otomatik dolduruldu</div>${satirlar.join('')}`;
+      chatMessages.appendChild(bilgi);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+  }
+
+  chatSend.disabled = false;
 }
 
 function clearChat() {

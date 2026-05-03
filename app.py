@@ -198,7 +198,7 @@ def _llm_extract_form(pdf_text: str) -> dict:
         "firma_adi, firma_adresi, firma_telefon, firma_eposta, hizmet_alani, "
         "baslangic_tarihi (YYYY-MM-DD), bitis_tarihi (YYYY-MM-DD), "
         "staj_gun_sayisi (sayı), haftalik_calisilan_gun (sayı).\n\n"
-        f"PDF METNİ:\n{pdf_text[:3500]}\n\n"
+        f"PDF METNİ:\n{pdf_text[:2000]}\n\n"
         "JSON:"
     )
     try:
@@ -207,7 +207,7 @@ def _llm_extract_form(pdf_text: str) -> dict:
             model=model,
             messages=[{"role":"system","content":sistem},
                       {"role":"user","content":kullanici}],
-            timeout=90, options={"temperature":0.0},
+            timeout=45, options={"temperature":0.0, "num_ctx":3000, "num_predict":220},
         )
         parsed = extract_json_object(raw) or {}
         # Tarih normalizasyonu
@@ -343,7 +343,7 @@ def agent_analiz(form_data: dict, pdf_text: str = "") -> dict:
         raw   = ol.chat(
             model=model,
             messages=[{"role": "user", "content": prompt}],
-            timeout=35, options={"temperature": 0.05},
+            timeout=25, options={"temperature": 0.05, "num_ctx": 768, "num_predict": 90},
         )
         parsed = extract_json_object(raw)
         if parsed and "karar" in parsed:
@@ -515,23 +515,22 @@ def api_yukle():
     # 1) Regex ile çıkar
     extracted = extract_fields_from_pdf_text(pdf_text) if pdf_text.strip() else {}
 
-    # 2) LLM ile zorunlu eksikleri tamamla
-    required = ["ad_soyad","ogrenci_no","bolum","tc_kimlik_no",
-                "firma_adi","firma_adresi","baslangic_tarihi",
-                "bitis_tarihi","staj_gun_sayisi"]
-    if pdf_text.strip() and any(k not in extracted for k in required):
-        llm_extracted = _llm_extract_form(pdf_text)
-        for k, v in llm_extracted.items():
-            if k not in extracted and v:
-                extracted[k] = v
-
-    # 3) Kullanıcının manuel girdiği alanlar PDF üzerine yazar
+    # 2) Kullanıcının manuel girdiği alanlar PDF üzerine yazar (önce uygula)
     for k, v in user_form.items():
         if v and str(v).strip():
             extracted[k] = v
 
-    form_data = extracted
+    # 3) Regex eksik bıraktıysa LLM ile tamamla (zorunlu alanlar için)
+    required = ["ad_soyad","ogrenci_no","bolum","tc_kimlik_no",
+                "firma_adi","firma_adresi","baslangic_tarihi",
+                "bitis_tarihi","staj_gun_sayisi"]
+    if pdf_text.strip() and any(not extracted.get(k) for k in required):
+        llm_extracted = _llm_extract_form(pdf_text)
+        for k, v in llm_extracted.items():
+            if not extracted.get(k) and v:
+                extracted[k] = v
 
+    form_data = extracted
     print(f"[YUKLE] form_data keys: {list(form_data.keys())}")
     print(f"[YUKLE] form_data: {json.dumps({k:v for k,v in form_data.items() if v}, ensure_ascii=False)}")
     result = agent_analiz(form_data, pdf_text)
@@ -660,108 +659,123 @@ def api_karar():
         c.execute("UPDATE submissions SET durum=? WHERE id=?", (durum, sub_id))
     return jsonify({"ok": True})
 
-@app.route("/api/chat", methods=["POST"])
-def api_chat():
-    data    = request.get_json(force=True) or {}
-    soru    = data.get("soru", "").strip()
-    gecmis  = data.get("gecmis", [])   # [{role, content}, ...]
-    if not soru:
-        return jsonify({"yanit": "Soru boş."})
+def _chat_messages(soru: str, gecmis: list, rag) -> list:
+    """Chat için sistem prompt + geçmiş + kullanıcı mesajı oluştur (ortak yardımcı)."""
+    hits    = rag.search(soru, top_k=5)
+    context = "\n".join(f"- {h.chunk_text[:700]}" for h in hits) if hits else ""
 
-    ol, rag = load_services()
-    # Yönergeden ilgili bölümleri RAG ile çek
-    hits    = rag.search(soru, top_k=4)
-    context = "\n\n".join(f"[Yönerge] {h.chunk_text[:700]}" for h in hits) if hits else ""
-
-    # Staj dönemi bilgisini sisteme ekle
-    donem_keys = [
-        "yaz_donem_adi","yaz_staj_baslangic","yaz_staj_bitis","yaz_basvuru_son_gun","yaz_min_staj_gun",
-        "ara_donem_adi","ara_staj_baslangic","ara_staj_bitis","ara_basvuru_son_gun","ara_min_staj_gun",
-    ]
+    donem_keys = ["yaz_donem_adi","yaz_staj_baslangic","yaz_staj_bitis","yaz_basvuru_son_gun","yaz_min_staj_gun",
+                  "ara_donem_adi","ara_staj_baslangic","ara_staj_bitis","ara_basvuru_son_gun","ara_min_staj_gun"]
     d = {k: get_setting(k) for k in donem_keys}
 
-    # Yaz dönemi gün hesabı (yaz tatili = staj penceresinin tüm günleri)
-    def _gun_say(b, s):
+    def _tr_tarih(iso: str) -> str:
+        """2026-06-22 → 22 Haziran 2026"""
+        aylar = ["","Ocak","Şubat","Mart","Nisan","Mayıs","Haziran",
+                 "Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"]
         try:
-            from datetime import date as _date
-            ba = _date.fromisoformat(b); so = _date.fromisoformat(s)
-            return (so - ba).days + 1
+            p = iso.split("-"); return f"{int(p[2])} {aylar[int(p[1])]} {p[0]}"
         except Exception:
-            return None
-    yaz_pencere_gun = _gun_say(d.get('yaz_staj_baslangic',''), d.get('yaz_staj_bitis',''))
-    ara_pencere_gun = _gun_say(d.get('ara_staj_baslangic',''), d.get('ara_staj_bitis',''))
+            return iso
+
+    yb  = _tr_tarih(d.get("yaz_staj_baslangic",""))
+    ybt = _tr_tarih(d.get("yaz_staj_bitis",""))
+    ybs = _tr_tarih(d.get("yaz_basvuru_son_gun",""))
+    ym  = d.get("yaz_min_staj_gun","20")
+    ab  = _tr_tarih(d.get("ara_staj_baslangic",""))
+    abt = _tr_tarih(d.get("ara_staj_bitis",""))
+    abs_= _tr_tarih(d.get("ara_basvuru_son_gun",""))
+    am  = d.get("ara_min_staj_gun","20")
 
     donem_bilgi = (
-        f"AKTİF STAJ DÖNEMLERİ (sistemde tanımlı resmi tarihler):\n"
-        f"☀️ {d.get('yaz_donem_adi','Yaz Dönemi')}\n"
-        f"   Staj penceresi: {d.get('yaz_staj_baslangic','')} → {d.get('yaz_staj_bitis','')}"
-        f"{f' ({yaz_pencere_gun} takvim günü)' if yaz_pencere_gun else ''}\n"
-        f"   Başvuru son tarihi: {d.get('yaz_basvuru_son_gun','')}\n"
-        f"   Minimum staj gün sayısı: {d.get('yaz_min_staj_gun','20')} iş günü\n\n"
-        f"❄️ {d.get('ara_donem_adi','Ara Dönem')} (Bahar/yarıyıl tatili)\n"
-        f"   Staj penceresi: {d.get('ara_staj_baslangic','')} → {d.get('ara_staj_bitis','')}"
-        f"{f' ({ara_pencere_gun} takvim günü)' if ara_pencere_gun else ''}\n"
-        f"   Başvuru son tarihi: {d.get('ara_basvuru_son_gun','')}\n"
-        f"   Minimum staj gün sayısı: {d.get('ara_min_staj_gun','20')} iş günü"
+        f"=== RESMİ STAJ TAKVİMİ ===\n"
+        f"YAZ DÖNEMİ ({d.get('yaz_donem_adi','')}):\n"
+        f"  • Staj BAŞLANGICI: {yb}  ← bu tarihten ÖNCE staj yapılamaz\n"
+        f"  • Staj BİTİŞİ:    {ybt}  ← bu tarihten SONRA staj yapılamaz\n"
+        f"  • Başvuru son tarih: {ybs}\n"
+        f"  • Zorunlu minimum SÜRE: {ym} iş günü  ← bu tarihe değil, gün sayısına dikkat\n\n"
+        f"ARA DÖNEM ({d.get('ara_donem_adi','')}):\n"
+        f"  • Staj BAŞLANGICI: {ab}\n"
+        f"  • Staj BİTİŞİ:    {abt}\n"
+        f"  • Başvuru son tarih: {abs_}\n"
+        f"  • Zorunlu minimum SÜRE: {am} iş günü"
     )
 
     sistem = (
-        "Sen Amasya MYO Staj Başvuru Asistanısın. Öğrencilerin sorularını AKICI, "
-        "AÇIKLAYICI ve DOĞAL bir Türkçe ile yanıtlarsın. Robotik liste değil, "
-        "anlaşılır bir paragraf akışında konuşursun.\n\n"
+        "Sen Amasya MYO Staj Asistanısın. Türkçe, samimi ve bilgilendirici cevaplar verirsin.\n\n"
         "YANIT KURALLARI:\n"
-        "• Cevabını en az 3-5 cümleden oluşan AKICI bir metin olarak ver.\n"
-        "• Aynı tarihi/sayıyı/kuralı ASLA tekrar etme — her cümle yeni bilgi katsın.\n"
-        "• Madde numarasını yanıtın SADECE SONUNDA bir kez 📌 ile belirt.\n"
-        "• İstersen 1 emoji/işaret kullanarak vurgu yapabilirsin.\n"
-        "• Markdown başlık (##) KULLANMA, sadece **kalın** ile vurgu yapabilirsin.\n"
-        "• Liste yerine düz metin paragrafı tercih et (gerçekten 3+ kalem yoksa).\n\n"
-        "BÖLÜMLER (zorunlu DEĞİL — doğal akışta dağıt):\n"
-        "1) Cevabın özü: kural/sayı/tarih.\n"
-        "2) Bağlam: Bu neden var, ne işe yarar, hangi durumda uygulanır.\n"
-        "3) Somut hayat örneği: Hayali bir öğrenci üzerinden 'mesela...' diye anlat.\n"
-        "4) Pratik tavsiye: Öğrenci ne yapmalı, neye dikkat etmeli.\n"
-        "5) Kaynak: 📌 Madde X-Y (en sonda).\n\n"
-        "İYİ YANIT ÖRNEĞİ (Devamsızlık sorusu):\n"
-        "'Stajınız sırasında yapabileceğiniz devamsızlık toplam staj süresinin **%10**'unu aşamaz. "
-        "Yani 60 iş günlük bir stajınız varsa yıl içinde en fazla 6 gün gelmeyebilirsiniz. "
-        "Bu oranı aşarsanız stajınız geçersiz sayılır ve bir sonraki dönemde yeniden başvurmanız gerekir. "
-        "Mazeretli devamsızlıklarda (sağlık raporu, resmi izin vs.) önceden staj koordinatörünüze haber vermeniz çok önemli; "
-        "aksi halde mazeret bile sayılmayabilir. Pratik tavsiye olarak staj defterinizde devam günlerinizi günü gününe işleyin. 📌 Madde 14-1'\n\n"
-        "KÖTÜ YANIT ÖRNEĞİ (yapma):\n"
-        "'**Doğrudan cevap:** %10. **Açıklama:** %10 demek %10 demektir. **Pratik örnek:** %10. **Kaynak:** Madde 14.'\n"
-        "(Tekrarlayan, robotik, içeriksiz — bunu YAPMA.)\n\n"
-        "KESİN KURALLAR:\n"
-        "- Her zaman YÖNERGE bölümlerine ve aktif STAJ DÖNEMİ bilgilerine dayandır.\n"
-        "- Tarih/süre soruları → sistem dönem bilgisini kullan, asla uydurma.\n"
-        "- Yönergede yoksa 'Bu konuda yönergede net bilgi yok, sekreterinize danışın' de.\n"
-        "- Yaz dönemi (yaz tatili) ile Ara dönem (yarıyıl/bahar) ayrı — karıştırma.\n\n"
+        "• 2-4 cümlelik doğal paragraf yaz. Robotik liste veya madde numarası yapma.\n"
+        "• Sadece **kalın** kullan, başlık (##) veya madde numarası (1. 2. 3.) YASAK.\n"
+        "• Sana verilen YÖNERGEDEN İLGİLİ BÖLÜMLER bloğunu DİKKATLE oku — cevap orada olabilir.\n"
+        "• Yönerge bölümünde cevap varsa mutlaka kullan; madde numarasını SONDA 📌 ile belirt.\n"
+        "• Tarih sorusunda → BAŞLANGIÇ ve BİTİŞ tarihini ver, minimum SÜRE bilgisini de ekle.\n"
+        "• 'Minimum süre' = kaç gün staj yapılması gerektiği; başlangıç tarihine EKLEME.\n"
+        "• SADECE verilen yönerge bölümlerinde de, resmi takvimde de cevap yoksa → 'Sekreterinize danışmanızı öneririm.' de.\n"
+        "• Asla tarih veya sayı uydurma; sadece aşağıdaki resmi takvimi kullan.\n\n"
         f"{donem_bilgi}"
     )
 
-    # Konuşma geçmişini hazırla (son 4 tur)
     messages = [{"role": "system", "content": sistem}]
     for m in gecmis[-4:]:
         if m.get("role") in ("user", "assistant") and m.get("content"):
-            content = m["content"][:600]
-            messages.append({"role": m["role"], "content": content})
+            messages.append({"role": m["role"], "content": m["content"][:500]})
 
-    # RAG context'i son kullanıcı mesajına ekle
     if context:
         user_content = (
+            f"Aşağıdaki yönerge bölümlerini kullanarak soruyu yanıtla. "
+            f"Bu bölümlerde cevap varsa MUTLAKA buradan yanıt ver.\n\n"
             f"=== YÖNERGEDEN İLGİLİ BÖLÜMLER ===\n{context}\n\n"
-            f"=== KULLANICI SORUSU ===\n{soru}\n\n"
-            f"Yukarıdaki yönerge bölümlerini ve sistem mesajındaki staj dönem tarihlerini kullanarak yanıtla."
+            f"=== SORU ===\n{soru}"
         )
     else:
         user_content = soru
     messages.append({"role": "user", "content": user_content})
+    return messages
+
+
+@app.route("/api/chat-stream", methods=["POST"])
+def api_chat_stream():
+    """Streaming chat — token-by-token SSE response."""
+    from flask import Response, stream_with_context
+    data    = request.get_json(force=True) or {}
+    soru    = (data.get("soru") or "").strip()
+    gecmis  = data.get("gecmis", [])
+    if not soru:
+        return Response("data: \n\n", mimetype="text/event-stream")
+
+    ol, rag = load_services()
+    messages = _chat_messages(soru, gecmis, rag)
+
+    def gen():
+        try:
+            model = ol.available_model(aktif_model())
+            for chunk in ol.chat_stream(model=model, messages=messages, timeout=120):
+                # SSE formatı: data: <json>\n\n
+                yield f"data: {json.dumps({'t': chunk}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'err': str(e)})}\n\n"
+
+    return Response(stream_with_context(gen()),
+                    mimetype="text/event-stream",
+                    headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"})
+
+
+@app.route("/api/chat", methods=["POST"])
+def api_chat():
+    data    = request.get_json(force=True) or {}
+    soru    = data.get("soru", "").strip()
+    gecmis  = data.get("gecmis", [])
+    if not soru:
+        return jsonify({"yanit": "Soru boş."})
+
+    ol, rag = load_services()
+    messages = _chat_messages(soru, gecmis, rag)
 
     chat_basarili = False
     try:
         model = ol.available_model(aktif_model())
         yanit = ol.chat(model=model, messages=messages, timeout=120,
-                        options={"temperature": 0.3})
+                        options={"temperature": 0.5})
         chat_basarili = True
     except Exception as e:
         # Çift "Ollama hatası:" prefix'ini önle
@@ -1687,5 +1701,20 @@ def api_agent_komut():
     })
 
 
+def _warmup_async():
+    """Modeli arka planda yükle — ilk kullanıcı isteğinde cold start olmasın."""
+    import threading
+    def _calis():
+        try:
+            ol, _ = load_services()
+            model = ol.available_model(aktif_model())
+            ol.warmup(model)
+            print(f"[Warmup] {model} VRAM'e yüklendi (30dk açık kalacak).")
+        except Exception as e:
+            print(f"[Warmup] Atlandı: {e}")
+    threading.Thread(target=_calis, daemon=True).start()
+
+
 if __name__ == "__main__":
+    _warmup_async()
     app.run(debug=True, port=5000)

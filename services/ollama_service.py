@@ -34,15 +34,29 @@ class OllamaClient:
         messages: List[Dict[str, str]],
         timeout: int = 60,
         options: Dict[str, Any] | None = None,
+        keep_alive: str = "30m",
     ) -> str:
-        """Ollama /api/chat endpoint'i ile sohbet."""
+        """Ollama /api/chat endpoint'i ile sohbet.
+        keep_alive: Model RAM/VRAM'de tutulma süresi (varsayılan 30dk).
+        Bu sayede ardışık sorularda cold-start olmaz.
+        """
+        default_opts = {
+            "num_ctx": 2048,
+            "num_predict": 512,
+            "num_thread": 8,
+            "temperature": 0.5,
+            "top_p": 0.9,
+        }
+        if options:
+            default_opts.update(options)
+
         payload: Dict[str, Any] = {
             "model": model,
             "messages": messages,
             "stream": False,
+            "keep_alive": keep_alive,
+            "options": default_opts,
         }
-        if options:
-            payload["options"] = options
 
         try:
             r = requests.post(
@@ -60,6 +74,53 @@ class OllamaClient:
             )
         except Exception as e:
             raise RuntimeError(f"Ollama hatası: {e}")
+
+    def chat_stream(
+        self,
+        model: str,
+        messages: List[Dict[str, str]],
+        timeout: int = 120,
+        options: Dict[str, Any] | None = None,
+        keep_alive: str = "30m",
+    ):
+        """Streaming chat — token-by-token yanıt için generator döndürür."""
+        default_opts = {
+            "num_ctx": 2048, "num_predict": 512, "num_thread": 8,
+            "temperature": 0.5, "top_p": 0.9,
+        }
+        if options:
+            default_opts.update(options)
+        payload = {
+            "model": model, "messages": messages, "stream": True,
+            "keep_alive": keep_alive, "options": default_opts,
+        }
+        try:
+            with requests.post(f"{self.base_url}/api/chat", json=payload,
+                               timeout=timeout, stream=True) as r:
+                r.raise_for_status()
+                for line in r.iter_lines():
+                    if not line: continue
+                    try:
+                        data = json.loads(line.decode("utf-8"))
+                        msg = data.get("message", {}).get("content", "")
+                        if msg: yield msg
+                        if data.get("done"): break
+                    except json.JSONDecodeError:
+                        continue
+        except Exception as e:
+            yield f"\n\n❌ Hata: {e}"
+
+    def warmup(self, model: str) -> bool:
+        """Modeli RAM/VRAM'e önceden yükle (cold start önler)."""
+        try:
+            requests.post(
+                f"{self.base_url}/api/generate",
+                json={"model": model, "prompt": "", "keep_alive": "30m"},
+                timeout=30,
+            )
+            return True
+        except Exception:
+            return False
 
     def available_model(self, preferred: str) -> str:
         """

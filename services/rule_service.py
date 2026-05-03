@@ -97,10 +97,6 @@ def validate_form(data: Dict[str, Any]) -> Dict[str, List[str]]:
                 except (ValueError, TypeError):
                     errors.append("Staj gün sayısı geçerli bir sayı olmalıdır.")
 
-            # Geçmiş tarih uyarısı — yalnızca bitiş de geçmişte ise
-            if d_end < datetime.now():
-                warnings.append("Staj tarihleri geçmişte kalmış; arşiv kaydı olabilir.")
-
         except ValueError:
             pass
 
@@ -135,13 +131,14 @@ def validate_form(data: Dict[str, Any]) -> Dict[str, List[str]]:
         },
     ]
 
-    # Staj gün sayısı kontrolü — hangi dönemdeyse ona göre min kontrol
+    # Staj gün sayısı kontrolü — DB'deki dönem min günleri ile karşılaştır
     gun = data.get("staj_gun_sayisi")
     if gun and bd and bt:
         try:
             gun_int = int(gun)
             d_b = datetime.strptime(bd, "%Y-%m-%d")
             d_e = datetime.strptime(bt, "%Y-%m-%d")
+            # Hangi döneme giriyorsa onun min gününü kullan, bulamazsa 20
             matched_min = None
             for p in periods:
                 if p["bas"] and p["bit"]:
@@ -161,42 +158,24 @@ def validate_form(data: Dict[str, Any]) -> Dict[str, List[str]]:
         except (ValueError, TypeError):
             pass
 
-    # Tarihler her iki dönemin de dışındaysa uyarı ver
+    # Formdaki staj tarihlerine göre bugün kontrolü
     if bd and bt:
         try:
-            d_b = datetime.strptime(bd, "%Y-%m-%d")
-            d_e = datetime.strptime(bt, "%Y-%m-%d")
-            in_any = False
-            for p in periods:
-                if p["bas"] and p["bit"]:
-                    try:
-                        pb = datetime.strptime(p["bas"], "%Y-%m-%d")
-                        pe = datetime.strptime(p["bit"], "%Y-%m-%d")
-                        if pb <= d_b and d_e <= pe:
-                            in_any = True
-                            break
-                    except ValueError:
-                        pass
-            if not in_any:
-                donem_str = "  |  ".join(
-                    f"{p['adi']}: {p['bas']}–{p['bit']}"
-                    for p in periods if p["bas"]
+            today   = datetime.now().date()
+            d_start = datetime.strptime(bd, "%Y-%m-%d").date()
+            d_end   = datetime.strptime(bt, "%Y-%m-%d").date()
+
+            if d_end < today:
+                warnings.append(
+                    f"Staj bitiş tarihi ({bt}) geçmişte kalmış. "
+                    "Başvuru süresi dolmuş olabilir, arşiv kaydı mı?"
                 )
-                warnings.append(f"Tarihler tanımlı dönemler dışında. ({donem_str})")
+            elif d_start <= today:
+                warnings.append(
+                    f"Staj dönemi zaten başlamış ({bd}). "
+                    "Başvuru geç yapılıyor olabilir."
+                )
         except ValueError:
             pass
-
-    # Başvuru son gün kontrolü — her iki dönem için
-    for p in periods:
-        if p["son_bas"] and bd:
-            try:
-                son = datetime.strptime(p["son_bas"], "%Y-%m-%d")
-                pb  = datetime.strptime(p["bas"], "%Y-%m-%d") if p["bas"] else None
-                d_b = datetime.strptime(bd, "%Y-%m-%d")
-                # Sadece bu döneme ait başvurular için kontrol et
-                if pb and d_b >= pb and datetime.now() > son:
-                    warnings.append(f"{p['adi']} başvuru son tarihi ({p['son_bas']}) geçmiş.")
-            except ValueError:
-                pass
 
     return {"missing": missing, "errors": errors, "warnings": warnings}

@@ -119,109 +119,192 @@ def _clean(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "").strip(" :.-·—_\t"))
 
 
+_LABEL_RE = re.compile(
+    r"(B[öo]l[üu]m|Program|Ad[ıı]\s*Soyad|[ÖO][ğg]renci|"
+    r"[İI]kametg|STAJ\s*YAPILAN|Adresi|Hizmet\s*Alan|Haftal[ıı]k|"
+    r"Telefon|E-posta|Web\s*Adresi|Fax|TC\s*Kimlik|Ba[şs]lama|Biti[şs]|"
+    r"Staj[ıı]n|Departman|Personel|[İI]mkan|Belge|[İI][şs]veren|"
+    r"Beyan[ıı]m|[ÖO]nemli|AMASYA|ZORUNLU|KYT|[İI]lgili\s*Makama|"
+    r"Fak[üu]ltemiz|[Öö]ğrencimizin|[Üü]cret|Yemek|Servis|Foto[ğg]raf|"
+    r"N[üu]fus|Savc[ıı]l[ıı]k|[Üü]retim|Pazarlama|Muh|B[üu]ro|"
+    r"Teknik|[İI]nsan|Staj[ıı]|tarih|aras[ıı]nda)",
+    re.IGNORECASE,
+)
+
 def extract_fields_from_pdf_text(pdf_text: str) -> Dict[str, Any]:
     """
-    Amasya MYO staj başvuru formu PDF metninden regex ile alanları çıkarır.
-    Döndürülen dict form şeması anahtarlarını kullanır.
+    Amasya MYO staj başvuru formu PDF metninden alanları çıkarır.
+    Strateji: değerler PDF'in alt kısmında ayrı satırlar halinde gruplanmış olur.
     """
     if not pdf_text:
         return {}
 
-    t = pdf_text.replace("\r", "\n")
-    # Satır sonlarını normalize et
-    lines = [ln.strip() for ln in t.split("\n") if ln.strip()]
+    lines = [ln.strip() for ln in pdf_text.replace("\r", "\n").split("\n") if ln.strip()]
     joined = " | ".join(lines)
-
-    def find(patterns) -> str:
-        """Verilen regex desenleri arasında ilk eşleşmeyi döner."""
-        if isinstance(patterns, str):
-            patterns = [patterns]
-        for pat in patterns:
-            m = re.search(pat, joined, re.IGNORECASE)
-            if m:
-                val = _clean(m.group(1))
-                # "|" karakterine kadar al (satır ayracı)
-                val = val.split(" | ")[0].split("  ")[0]
-                if val and val not in (":", "-"):
-                    return val
-        return ""
 
     extracted: Dict[str, Any] = {}
 
-    # Öğrenci
-    extracted["ad_soyad"] = find([
-        r"Ad[ıi]\s*Soyad[ıi]\s*[:：]?\s*([^|]{2,80})",
-    ])
-    extracted["ogrenci_no"] = find([
-        r"[ÖOöo]ğ?renci\s*No\s*[:：]?\s*(\d{6,12})",
-    ])
-    extracted["bolum"] = find([
-        r"B[öo]l[üu]m[üu]?\s*/?\s*(?:Program[ıi])?\s*[:：]\s*([^|:]{3,60}?)(?=\s{2,}|\s*TC\s|\s*T\.C|\s*\||\s*Ad[ıi]\s|$)",
-        r"Program[ıi]\s*[:：]\s*([^|:]{3,60}?)(?=\s{2,}|\s*\||$)",
-    ])
-    extracted["tc_kimlik_no"] = find([
-        r"TC\s*Kimlik\s*No\s*[:：]?\s*(\d{11})",
-        r"T\.?C\.?\s*Kimlik\s*[:：]?\s*(\d{11})",
-    ])
-    extracted["telefon_no"] = find([
-        r"(?:Telefon\s*No|Cep\s*Telefonu?)\s*[:：]?\s*(\+?\d[\d\s\-]{8,20})",
-    ])
-    extracted["ikametgah_adresi"] = find([
-        r"[İI]kametg[âa]h?\s*Adresi\s*[:：]?\s*([^|]{5,200})",
-    ])
+    # ── 1. Kesin kalıplarla al (tip tabanlı) ──────────────────────────────────
 
-    # Firma
-    extracted["firma_adi"] = find([
-        r"(?:STAJ YAPILAN YER[İI]N|STAJ YAPACA[ĞG]I YER).*?Ad[ıi]\s*[:：]?\s*([^|]{3,120})",
-        r"Firma\s*Ad[ıi]\s*[:：]?\s*([^|]{3,120})",
-        r"Kurum\s*Ad[ıi]\s*[:：]?\s*([^|]{3,120})",
-    ])
-    # Firma adresi: "STAJ YAPILAN" bölümünden sonra gelen "Adresi :" — ikametgah hariç
-    m_fa = re.search(
-        r"STAJ\s*YAPI?LAN[^|]*?Ad[ıi]\s*[:：][^|]*?\|\s*Adresi\s*[:：]\s*([^|]{5,200})",
-        joined, re.IGNORECASE,
-    )
-    if m_fa:
-        extracted["firma_adresi"] = _clean(m_fa.group(1)).split("  ")[0]
-    else:
-        # Fallback: "İkametgah" içermeyen ilk "Adresi :"
-        for m in re.finditer(r"(?<!kametg[âa]h\s)Adresi\s*[:：]\s*([^|]{5,200})", joined, re.IGNORECASE):
-            val = _clean(m.group(1)).split("  ")[0]
-            if val:
-                extracted["firma_adresi"] = val
+    # TC Kimlik: tam 11 rakam
+    m = re.search(r'\b(\d{11})\b', joined)
+    if m:
+        extracted["tc_kimlik_no"] = m.group(1)
+
+    # E-posta
+    m = re.search(r'\b([\w.\-]+@[\w.\-]+\.\w+)\b', joined)
+    if m:
+        extracted["firma_eposta"] = m.group(1)
+
+    # ISO tarihler (YYYY-MM-DD), ilk 2 farklı tanesini al
+    dates: list = []
+    for m in re.finditer(r'\b(\d{4}-\d{2}-\d{2})\b', joined):
+        if m.group(1) not in dates:
+            dates.append(m.group(1))
+        if len(dates) == 2:
+            break
+    # dd.mm.yyyy veya dd/mm/yyyy
+    for m in re.finditer(r'\b(\d{1,2}[./]\d{1,2}[./]\d{4})\b', joined):
+        nd = normalize_date(m.group(1))
+        if nd and nd not in dates:
+            dates.append(nd)
+        if len(dates) == 2:
+            break
+    if dates:
+        extracted["baslangic_tarihi"] = dates[0]
+    if len(dates) > 1:
+        extracted["bitis_tarihi"] = dates[1]
+
+    # Telefon numaraları: 0 ile başlayan 11 hane
+    phones: list = []
+    for m in re.finditer(r'\b(0\d{3}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2})\b', joined):
+        clean = re.sub(r'[\s\-]', '', m.group(1))
+        if clean not in phones:
+            phones.append(clean)
+    if phones:
+        extracted["telefon_no"] = phones[0]
+    if len(phones) > 1:
+        extracted["firma_telefon"] = phones[1]
+
+    # ── 2. "Değer satırları" bloğunu bul ve sıralı parse et ───────────────────
+    # Bu PDF'te değerler form etiketleri bittikten sonra ayrı satırlar halinde gelir.
+    # Etiket olmayan, kısa veya anlamlı satırlar değer satırıdır.
+
+    def is_label_line(line: str) -> bool:
+        """Satır template etiketi mi?"""
+        return bool(_LABEL_RE.search(line)) or line.endswith(':') or (
+            ':' in line and len(line) < 120 and not re.search(r'@', line)
+        )
+
+    # Template bitiş satırını bul: "Savcılık Belgesi" satırı (sayfa 1 son checkbox)
+    template_end_idx = 0
+    for i, line in enumerate(lines):
+        if re.search(r'Savc[ıı]l[ıı]k\s*Belge', line, re.IGNORECASE):
+            template_end_idx = i + 1
+            break
+    # Fallback: "Ücret Yemek" satırının 2 sonrası
+    if not template_end_idx:
+        for i, line in enumerate(lines):
+            if re.search(r'[Üü]cret.{1,20}Yemek|[Üü]cret.{1,5}Foto', line, re.IGNORECASE):
+                template_end_idx = i + 2
                 break
 
-    extracted["hizmet_alani"] = find([
-        r"Hizmet\s*Alan[ıi]\s*[:：]\s*([^|:]{3,80}?)(?=\s{2,}|\s*\||\s*Haftal[ıi]k|$)",
-    ])
-    extracted["haftalik_calisilan_gun"] = find([
-        r"Haftal[ıi]k\s*(?:[ÇçCc]al[ıi][şs][ıi]lan\s*)?G[üu]n\s*[:：]?\s*(\d{1,2})",
-    ])
-    extracted["firma_telefon"] = find([
-        r"(?:Firma\s*)?Telefon(?:\s*No)?\s*[:：]?\s*(\+?\d[\d\s\-()]{8,22})",
-    ])
-    extracted["firma_eposta"] = find([
-        r"E[\-\s]?posta(?:\s*Adresi)?\s*[:：]?\s*([\w\.\-]+@[\w\.\-]+\.\w+)",
-    ])
-    extracted["firma_web"] = find([
-        r"Web(?:\s*Adresi)?\s*[:：]?\s*((?:https?://)?[\w\.\-]+\.\w{2,}[\w/\.\-]*)",
-    ])
+    val_lines = []
+    for line in lines[template_end_idx:]:
+        # Sayfa 2 başladığında dur
+        if re.search(r'[İI][şs]veren|YETK[İI]L[İI]', line, re.IGNORECASE):
+            break
+        # Güz/Bahar dönem seçimi
+        if re.match(r'^(G[üu]z|Bahar)$', line, re.IGNORECASE):
+            extracted["donem"] = line
+            continue
+        # Etiket satırı değilse değer olarak al
+        if not is_label_line(line) and len(line) >= 2:
+            val_lines.append(line)
 
-    # Tarihler: dd.mm.yyyy veya dd/mm/yyyy biçiminde
-    bas = find([
-        r"(?:Staj[ıi]n)?\s*Ba[şs]lama\s*Tarihi\s*[:：]?\s*(\d{1,2}[./\-]\d{1,2}[./\-]\d{4})",
-        r"Ba[şs]lang[ıi][çc]\s*Tarihi\s*[:：]?\s*(\d{1,2}[./\-]\d{1,2}[./\-]\d{4})",
-    ])
-    bit = find([
-        r"(?:Staj[ıi]n)?\s*Biti[şs]\s*Tarihi\s*[:：]?\s*(\d{1,2}[./\-]\d{1,2}[./\-]\d{4})",
-    ])
-    if bas: extracted["baslangic_tarihi"] = normalize_date(bas) or bas
-    if bit: extracted["bitis_tarihi"]     = normalize_date(bit) or bit
+    # Değer satırlarını sırayla ata
+    # Bilinen tipler: 11-digit (TC), 6-10 digit (öğrenci no), telefon, tarih, email zaten alındı
+    # Geri kalanlar metin alanları — sıra: bölüm, ad_soyad(?), öğrenci no, tel, ikametgah,
+    #   firma_adi, firma_adresi, hizmet_alani, haftalık_gün, firma_tel
+    text_queue = []
+    tc_val = extracted.get("tc_kimlik_no", "")
 
-    extracted["staj_gun_sayisi"] = find([
-        r"(\d{1,3})\s*i[şs]\s*g[üu]n[üu]",
-        r"(?:Staj\s*)?G[üu]n\s*Say[ıi]s[ıi]\s*[:：]?\s*(\d{1,3})",
-    ])
+    for line in val_lines:
+        # Zaten alınanları atla
+        if line == tc_val:
+            continue
+        if re.match(r'^\d{4}-\d{2}-\d{2}$', line):
+            continue
+        if re.match(r'^(G[üu]z|Bahar)$', line, re.IGNORECASE):
+            continue
+        if re.match(r'^[\w.\-]+@[\w.\-]+\.\w+$', line):
+            continue
+
+        # Sadece rakam
+        if re.match(r'^\d+$', line):
+            n = len(line)
+            val = line
+            if n == 11 and val == tc_val:
+                continue
+            if n == 11:  # başka 11-digit: muhtemelen öğrenci tel tekrar
+                continue
+            if 6 <= n <= 10 and not extracted.get("ogrenci_no"):
+                extracted["ogrenci_no"] = val
+                continue
+            if 1 <= n <= 3 and not extracted.get("staj_gun_sayisi"):
+                extracted["staj_gun_sayisi"] = val
+                continue
+            if n == 1 and not extracted.get("haftalik_calisilan_gun"):
+                extracted["haftalik_calisilan_gun"] = val
+                continue
+            continue
+
+        # Metin değeri
+        text_queue.append(line)
+
+    # Sıra: bölüm → (ad_soyad eğer varsa) → ikametgah → firma_adi → firma_adresi → hizmet_alani
+    text_fields = ["bolum", "ikametgah_adresi", "firma_adi", "firma_adresi", "hizmet_alani"]
+    tf_idx = 0
+    for val in text_queue:
+        if tf_idx >= len(text_fields):
+            break
+        field = text_fields[tf_idx]
+        extracted[field] = val
+        tf_idx += 1
+
+    # ── 3. Satır içi etiket:değer (fallback, bazı PDF'lerde değer etiketle birlikte) ──
+    def inline(patterns) -> str:
+        for pat in patterns:
+            m = re.search(pat, joined, re.IGNORECASE)
+            if m:
+                val = _clean(m.group(1)).split(" | ")[0].split("  ")[0]
+                if val and len(val.strip()) > 1:
+                    return val
+        return ""
+
+    if not extracted.get("ad_soyad"):
+        # Sayfa 1: "Adı Soyadı :" satırından sonraki satır, sayfa 2'ye bakmadan
+        p1 = joined.split("STAJ")[0] if "STAJ" in joined else joined
+        m = re.search(r"Ad[ıı]\s*Soyad[ıı]\s*[:：]\s*([^|]{2,80})", p1, re.IGNORECASE)
+        if m:
+            val = _clean(m.group(1)).split("  ")[0]
+            if val and len(val) > 1:
+                extracted["ad_soyad"] = val
+
+    if not extracted.get("firma_adi"):
+        extracted["firma_adi"] = inline([
+            r"STAJ\s*YAPILAN\s*YER[İI]N[^|]*\|\s*Ad[ıı]\s*[:：]\s*([^|]{3,120})",
+        ])
+
+    if not extracted.get("hizmet_alani"):
+        extracted["hizmet_alani"] = inline([
+            r"Hizmet\s*Alan[ıı]\s*[:：]\s*([^|:]{3,80}?)(?=\s{2,}|\s*\||\s*Haftal|$)",
+        ])
+
+    if not extracted.get("haftalik_calisilan_gun"):
+        extracted["haftalik_calisilan_gun"] = inline([
+            r"Haftal[ıı]k[^|:]*[:：]\s*(\d{1,2})",
+        ])
 
     # Boş değerleri temizle
     return {k: v for k, v in extracted.items() if v and str(v).strip()}

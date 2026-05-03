@@ -295,7 +295,17 @@ body {
 .chat-msg { max-width: 88%; padding: 10px 14px; border-radius: 14px; font-size: .86rem; line-height: 1.55; word-break: break-word; }
 .chat-msg.user { background: var(--primary); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
 .chat-msg.bot  { background: var(--gray-100); color: var(--gray-800); align-self: flex-start; border-bottom-left-radius: 4px; }
-.chat-msg.typing { opacity: .65; font-style: italic; }
+.chat-msg.typing { opacity: .9; }
+.chat-msg.typing.typing { font-style: normal; opacity: 1; }
+.cursor-blink {
+  display: inline-block; color: var(--primary); font-weight: 700;
+  animation: cursor-blink 1s steps(2) infinite;
+  margin-left: 2px;
+}
+@keyframes cursor-blink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
 .chat-msg-error {
   background: #fee2e2 !important; color: #991b1b !important;
   border-left: 3px solid #dc2626 !important;

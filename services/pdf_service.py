@@ -108,35 +108,30 @@ def _p1_overlay(c, d):
     sv = lambda k: str(d.get(k) or "")
 
     # ── PARAGRAF: dönem, tarih/gün ──────────────────────────────────────────
-    # Placeholder TAM YÜKSEKLİK: y_alt=baseline → y_üst=baseline+12pt
-    # White rect'in placeholder'ı tamamen örtmesi için:
-    #   bit/gun: baseline 650 → text 650-662 → rect y=649, h=15
-    #   bas:     baseline 671 → text 671-683 → rect y=670, h=15
-    #   donem:   baseline 692 → text 692-704 → rect y=691, h=15
-    # Donem dot'ları: 5 ellipsis x=258.6-318.0 (G of Güz/Bahar at 318.8)
-    # Bas dots:       x=496-541 ("ile" at 547)
-    # Bit dots:       x=36-83
-    # Gun dots:       x=173-210 (iki '…… ……' grubu, 'g'ünü at 213)
+    # pdfplumber ölçümleri (staj_belgesi.pdf, H=841.9):
+    #   Satır 1 top=138.3: donem  x=258.6-370.6 (112pt), rl_baseline≈696
+    #   Satır 2 top=159.0: bas    x=496.4-542.1,          rl_baseline≈675
+    #   Satır 3 top=179.7: bit    x=36-84.7, gun x=173.5-209.8, rl_baseline≈654
     donem = sv("donem")
     if donem:
         c.setFillColorRGB(1, 1, 1)
-        c.rect(256, 689, 64, 17, fill=1, stroke=0)
-        _val(c, 261, 692, donem, 11)
+        c.rect(255, 690, 120, 14, fill=1, stroke=0)   # tüm ?????Güz/Bahar alanını sil
+        _val(c, 261, 696, donem, 11)
     bas = sv("baslangic_tarihi")
     bit = sv("bitis_tarihi")
     gun = sv("staj_gun_sayisi")
     if bas:
         c.setFillColorRGB(1, 1, 1)
-        c.rect(493, 668, 53, 17, fill=1, stroke=0)
-        _val(c, 496, 671, bas, 10)
+        c.rect(491, 670, 58, 13, fill=1, stroke=0)
+        _val(c, 494, 675, bas, 9.5)
     if bit:
         c.setFillColorRGB(1, 1, 1)
-        c.rect(33, 647, 55, 17, fill=1, stroke=0)
-        _val(c, 36, 650, bit, 10)
+        c.rect(33, 649, 58, 13, fill=1, stroke=0)
+        _val(c, 36, 654, bit, 9.5)
     if gun:
         c.setFillColorRGB(1, 1, 1)
-        c.rect(171, 647, 42, 17, fill=1, stroke=0)
-        _val(c, 178, 650, str(gun), 10)
+        c.rect(170, 649, 45, 13, fill=1, stroke=0)
+        _val(c, 176, 654, str(gun), 10)
     c.setFillGray(0)
 
     # ── ÖĞRENCİ ALANLARI ──────────────────────────────────────────────────────
@@ -145,10 +140,10 @@ def _p1_overlay(c, d):
     #   Adı Soyadı:     rl_y=561.8, ":" x=160
     #   Öğrenci No/Tel: rl_y=538.7, ":" x=160 / ":" x=390
     #   İkametgâh:      rl_y=515.5, ":" x=160
-    Y_R1 = 587
-    Y_R2 = 564
-    Y_R3 = 540
-    Y_R4 = 517
+    Y_R1 = 590
+    Y_R2 = 567
+    Y_R3 = 544
+    Y_R4 = 521
 
     _val(c, 170, Y_R1, sv("bolum"))
     _val(c, 446, Y_R1, sv("tc_kimlik_no"))
@@ -165,17 +160,17 @@ def _p1_overlay(c, d):
     #   Tel/Başlama:     rl_y=394.4, sağ kolon ":" x=484
     #   Eposta/Bitiş:    rl_y=371.2
     #   Web/Fax:         rl_y=347.9
-    Y_S1 = 466
-    Y_S2 = 443
-    Y_S3 = 420
-    Y_S4 = 397
-    Y_S5 = 374
-    Y_S6 = 350
+    Y_S1 = 468
+    Y_S2 = 445
+    Y_S3 = 422
+    Y_S4 = 398
+    Y_S5 = 375
+    Y_S6 = 352
 
     _val(c, 165, Y_S1, sv("firma_adi"))
     _wrap_val(c, sv("firma_adresi"), 165, Y_S2, 290, size=8.5)
     _val(c, 165, Y_S3, sv("hizmet_alani"))
-    _val(c, 480, Y_S3, sv("haftalik_calisilan_gun"))
+    _val(c, 510, Y_S3, sv("haftalik_calisilan_gun"))
     _val(c, 165, Y_S4, sv("firma_telefon"))
     _val(c, 490, Y_S4, sv("baslangic_tarihi"))
     _val(c, 165, Y_S5, sv("firma_eposta"))
