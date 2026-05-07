@@ -45,8 +45,9 @@ def bildirim_ekle(tip: str, mesaj: str, link_id: int = None):
 
 # Kullanıcı adı → (şifre, rol)
 USERS = {
-    "ogrenci":  {"password": "ogrenci123",  "role": "ogrenci"},
-    "sekreter": {"password": "sekreter123", "role": "sekreter"},
+    "ogrenci":       {"password": "ogrenci123",  "role": "ogrenci"},
+    "sekreter":      {"password": "sekreter123", "role": "sekreter"},
+    "bolum_baskani": {"password": "bb2025",      "role": "bolum_baskani"},
 }
 
 def login_required(f):
@@ -62,6 +63,14 @@ def sekreter_required(f):
     def decorated(*args, **kwargs):
         if session.get("role") != "sekreter":
             return jsonify({"ok": False, "hata": "Yetkisiz erişim"}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+def bb_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if session.get("role") != "bolum_baskani":
+            return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated
 
@@ -136,6 +145,10 @@ def _migrate():
     with get_db() as c:
         for table, col, typ in [
             ("submissions",    "ai_detay_json", "TEXT"),
+            ("submissions",    "bb_durum",      "TEXT"),
+            ("submissions",    "bb_ad",         "TEXT"),
+            ("submissions",    "bb_tarih",      "TEXT"),
+            ("submissions",    "bb_pdf_yolu",   "TEXT"),
             ("staj_raporlari", "ai_analiz",     "TEXT"),
             ("staj_raporlari", "ai_skor",       "INTEGER"),
         ]:
@@ -432,6 +445,8 @@ def login():
         if user and user["password"] == password:
             session["role"]     = user["role"]
             session["username"] = username
+            if user["role"] == "bolum_baskani":
+                return redirect(url_for("bolum_baskani_page"))
             return redirect(url_for("index"))
         error = "Kullanıcı adı veya şifre hatalı."
     return render_template("login.html", error=error)
@@ -535,17 +550,19 @@ def api_yukle():
     print(f"[YUKLE] form_data: {json.dumps({k:v for k,v in form_data.items() if v}, ensure_ascii=False)}")
     result = agent_analiz(form_data, pdf_text)
 
+    # Her başvuru BB kuyruğuna girer; AI kararı BB'ye öneri olarak gösterilir
     with get_db() as c:
         cur = c.execute(
             """INSERT INTO submissions
                (original_adi, yukleme_tarihi, durum,
                 ai_karar, ai_mesaj, ai_rapor, ai_guven,
-                extracted_json, missing_json, ai_detay_json)
-               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                extracted_json, missing_json, ai_detay_json,
+                bb_durum)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 file.filename,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "onaylandi" if result["karar"] == "KABUL" else "reddedildi",
+                "bb_bekliyor",
                 result["karar"],
                 result["mesaj"],
                 result.get("rapor", ""),
@@ -553,6 +570,7 @@ def api_yukle():
                 json.dumps(form_data, ensure_ascii=False),
                 json.dumps(result.get("eksikler", []), ensure_ascii=False),
                 json.dumps(result.get("ai_detay", {}), ensure_ascii=False),
+                "bekliyor",
             ),
         )
         sub_id = cur.lastrowid
@@ -576,7 +594,8 @@ def api_yukle():
         "staj_gun":  form_data.get("staj_gun_sayisi", ""),
     }
     return jsonify({"ok": True, "id": sub_id, "tarihler": tarih_bilgi,
-                    "form_data": form_data, **result})
+                    "form_data": form_data, "bb_durum": "bekliyor",
+                    **result})
 
 @app.route("/api/staj-donem", methods=["GET"])
 def api_staj_donem_get():
@@ -634,30 +653,112 @@ def api_basvuru_pdf(sub_id):
 @app.route("/api/basvurular")
 @sekreter_required
 def api_basvurular():
+    # Sekreter yalnızca BB onaylı ve sekretere iletilmiş başvuruları görür
     rows = get_db().execute(
-        "SELECT * FROM submissions ORDER BY id DESC"
+        """SELECT * FROM submissions
+           WHERE durum IN ('sekreter_bekliyor','onaylandi','reddedildi','bb_reddedildi')
+           ORDER BY id DESC"""
     ).fetchall()
     out = []
     for r in rows:
         d = dict(r)
-        # Sadece PDF'i kalıcı kaydedilmiş başvurular gösterilir
         if not (UPLOAD / f"{d['id']}.pdf").exists():
             continue
         d["pdf_var"] = True
         out.append(d)
     return jsonify(out)
 
+def _sekreter_ai_kontrol(sub_id: int) -> dict:
+    """E-imza + form + AI üç kontrolü çalıştır.
+    Tüm kontroller geçerse durum='onaylandi' yap ve oto_onaylandi=True döndür.
+    Herhangi biri geçmezse durum değiştirmez, oto_onaylandi=False döndür."""
+    row = get_db().execute(
+        "SELECT extracted_json, bb_durum, bb_ad, bb_tarih FROM submissions WHERE id=?",
+        (sub_id,)
+    ).fetchone()
+    if not row:
+        return {"ok": False, "hata": "Başvuru bulunamadı"}
+
+    kontroller = {}
+    tum_ok = True
+
+    # 1. E-imza kontrolü
+    imza_ok = (row["bb_durum"] == "onaylandi"
+               and bool((row["bb_ad"] or "").strip())
+               and bool((row["bb_tarih"] or "").strip()))
+    kontroller["e_imza"] = {
+        "ok":    imza_ok,
+        "mesaj": f"BB: {row['bb_ad']} ({row['bb_tarih']})" if imza_ok
+                 else "Bölüm Başkanı e-imzası eksik veya geçersiz",
+    }
+    if not imza_ok:
+        tum_ok = False
+
+    # 2. Form / kural kontrolü
+    form_data = {}
+    try: form_data = json.loads(row["extracted_json"] or "{}")
+    except Exception: pass
+    try:
+        from services.rule_service import validate_form
+        v = validate_form(form_data)
+        form_ok  = not v["missing"] and not v["errors"]
+        sorunlar = (v.get("missing") or []) + (v.get("errors") or [])
+        kontroller["form"] = {
+            "ok":      form_ok,
+            "mesaj":   "Tüm zorunlu alanlar dolu." if form_ok
+                       else "Eksik/hatalı: " + ", ".join(sorunlar[:4]),
+            "uyarilar": v.get("warnings", [])[:3],
+        }
+        if not form_ok:
+            tum_ok = False
+    except Exception as e:
+        kontroller["form"] = {"ok": False, "mesaj": f"Form kontrolü hatası: {e}", "uyarilar": []}
+        tum_ok = False
+
+    # 3. AI analiz (Ollama modeli)
+    try:
+        ai_sonuc = agent_analiz(form_data)
+        ai_ok    = ai_sonuc["karar"] == "KABUL"
+        kontroller["ai"] = {
+            "ok":    ai_ok,
+            "mesaj": ai_sonuc.get("mesaj", ""),
+            "guven": round(float(ai_sonuc.get("guven", 0.8)), 2),
+        }
+        if not ai_ok:
+            tum_ok = False
+    except Exception as e:
+        kontroller["ai"] = {"ok": False, "mesaj": f"AI analiz hatası: {e}", "guven": 0}
+        tum_ok = False
+
+    if tum_ok:
+        with get_db() as c:
+            c.execute("UPDATE submissions SET durum='onaylandi' WHERE id=?", (sub_id,))
+
+    return {"ok": True, "oto_onaylandi": tum_ok, "kontroller": kontroller}
+
+
 @app.route("/api/karar", methods=["POST"])
 @sekreter_required
 def api_karar():
+    """Sekreter manuel override: AI otomatik onaylamadıysa devreye girer."""
     data   = request.get_json(force=True) or {}
     sub_id = data.get("id")
     karar  = data.get("karar")
-    durum  = "onaylandi" if karar == "KABUL" else "reddedildi"
-    with get_db() as c:
-        # Sadece durum güncellenir — ai_karar (AI önerisi) korunur
-        c.execute("UPDATE submissions SET durum=? WHERE id=?", (durum, sub_id))
-    return jsonify({"ok": True})
+
+    if karar == "RED":
+        with get_db() as c:
+            c.execute("UPDATE submissions SET durum='reddedildi' WHERE id=?", (sub_id,))
+        return jsonify({"ok": True, "onaylandi": False})
+
+    # KABUL override — sekreter kontrollerine rağmen onaylıyor
+    if data.get("force"):
+        with get_db() as c:
+            c.execute("UPDATE submissions SET durum='onaylandi' WHERE id=?", (sub_id,))
+        return jsonify({"ok": True, "onaylandi": True})
+
+    # Kontrolleri yeniden çalıştır (tekrar gelen manuel denemeler için)
+    sonuc = _sekreter_ai_kontrol(sub_id)
+    return jsonify({**sonuc, "onaylandi": sonuc.get("oto_onaylandi", False)})
 
 def _chat_messages(soru: str, gecmis: list, rag) -> list:
     """Chat için sistem prompt + geçmiş + kullanıcı mesajı oluştur (ortak yardımcı)."""
@@ -1203,8 +1304,8 @@ def api_ai_ozet():
     # 1) Python ile istatistikleri hesapla (anında)
     toplam = len(rows)
     onayli = sum(1 for r in rows if r["durum"] == "onaylandi")
-    reddi  = sum(1 for r in rows if r["durum"] == "reddedildi")
-    bekle  = sum(1 for r in rows if r["durum"] == "beklemede")
+    reddi  = sum(1 for r in rows if r["durum"] in ("reddedildi","bb_reddedildi"))
+    bekle  = sum(1 for r in rows if r["durum"] in ("beklemede","bb_bekliyor","bb_onaylandi","sekreter_bekliyor"))
 
     firmalar, bolumler = {}, {}
     for r in rows:
@@ -1356,7 +1457,7 @@ def _agent_tool_list(filter_="hepsi"):
     q = "SELECT id, original_adi, durum, ai_karar, yukleme_tarihi, extracted_json FROM submissions"
     args = []
     if filter_ == "beklemede":
-        q += " WHERE durum='beklemede'"
+        q += " WHERE durum IN ('sekreter_bekliyor','bb_bekliyor','bb_onaylandi')"
     elif filter_ == "kabul":
         q += " WHERE ai_karar='KABUL'"
     elif filter_ == "red":
@@ -1420,8 +1521,8 @@ def _agent_tool_istatistik(tip):
         return {
             "toplam":     len(rows),
             "kabul":      sum(1 for r in rows if r["durum"] == "onaylandi"),
-            "red":        sum(1 for r in rows if r["durum"] == "reddedildi"),
-            "beklemede":  sum(1 for r in rows if r["durum"] == "beklemede"),
+            "red":        sum(1 for r in rows if r["durum"] in ("reddedildi","bb_reddedildi")),
+            "beklemede":  sum(1 for r in rows if r["durum"] in ("sekreter_bekliyor","bb_bekliyor","bb_onaylandi")),
         }
     sayac = {}
     key = "firma_adi" if tip == "firma" else "bolum"
@@ -1436,7 +1537,7 @@ def _agent_tool_istatistik(tip):
 def _agent_tool_oncelik():
     """Bekleyen başvuruları aciliyete göre sırala."""
     rows = _filtrele_pdf_var(get_db().execute(
-        "SELECT * FROM submissions WHERE durum='beklemede' ORDER BY id DESC"
+        "SELECT * FROM submissions WHERE durum='sekreter_bekliyor' ORDER BY id DESC"
     ).fetchall())
     skorlu = []
     for r in rows:
@@ -1698,6 +1799,197 @@ def api_agent_komut():
         # Geriye dönük: ilk tool sonucunu da gönder (frontend için)
         "tool": sonuclar[0]["tool"] if sonuclar else None,
         "yanit": aciklama or (sonuclar[0]["sonuc"].get("mesaj","") if sonuclar and isinstance(sonuclar[0].get("sonuc"), dict) else ""),
+    })
+
+
+# ─── BÖLÜM BAŞKANI ROTLARI ────────────────────────────────────────────────────
+
+@app.route("/bolum-baskani")
+@bb_required
+def bolum_baskani_page():
+    return render_template("bolum_baskani.html", username=session.get("username",""))
+
+@app.route("/api/bb/bekleyenler")
+@bb_required
+def api_bb_bekleyenler():
+    rows = get_db().execute(
+        "SELECT * FROM submissions WHERE bb_durum='bekliyor' ORDER BY id DESC"
+    ).fetchall()
+    result = []
+    for r in rows:
+        ext = {}
+        try: ext = json.loads(r["extracted_json"] or "{}")
+        except: pass
+        result.append({
+            "id":       r["id"],
+            "tarih":    r["yukleme_tarihi"],
+            "ad":       ext.get("ad_soyad", r["original_adi"] or "—"),
+            "bolum":    ext.get("bolum","—"),
+            "firma":    ext.get("firma_adi","—"),
+            "bas":      ext.get("baslangic_tarihi",""),
+            "bit":      ext.get("bitis_tarihi",""),
+            "gun":      ext.get("staj_gun_sayisi",""),
+            "ai_mesaj": r["ai_mesaj"] or "",
+            "ai_karar": r["ai_karar"] or "",
+        })
+    return jsonify(result)
+
+@app.route("/api/bb/onayla", methods=["POST"])
+@bb_required
+def api_bb_onayla():
+    from services.pdf_service import fill_staj_pdf
+    data   = request.get_json(force=True) or {}
+    sub_id = int(data.get("id", 0))
+    bb_ad  = (data.get("ad") or session.get("username","Bölüm Başkanı")).strip()
+    if not sub_id:
+        return jsonify({"ok": False, "hata": "ID gerekli"}), 400
+
+    row = get_db().execute("SELECT * FROM submissions WHERE id=?", (sub_id,)).fetchone()
+    if not row:
+        return jsonify({"ok": False, "hata": "Başvuru bulunamadı"}), 404
+
+    form_data = {}
+    try: form_data = json.loads(row["extracted_json"] or "{}")
+    except: pass
+
+    bb_tarih = datetime.now().strftime("%d.%m.%Y")
+    form_data["bb_ad"]    = bb_ad
+    form_data["bb_tarih"] = bb_tarih
+
+    # İmzalı PDF üret
+    signed_dir = UPLOAD / "imzali"
+    signed_dir.mkdir(parents=True, exist_ok=True)
+    signed_path = str(signed_dir / f"{sub_id}_imzali.pdf")
+    try:
+        fill_staj_pdf(form_data, signed_path)
+    except Exception as e:
+        return jsonify({"ok": False, "hata": f"PDF üretilemedi: {e}"}), 500
+
+    with get_db() as c:
+        c.execute(
+            "UPDATE submissions SET bb_durum=?, bb_ad=?, bb_tarih=?, bb_pdf_yolu=?, durum=? WHERE id=?",
+            ("onaylandi", bb_ad, bb_tarih, signed_path, "bb_onaylandi", sub_id),
+        )
+    bildirim_ekle("basvuru", f"✅ #{sub_id} Bölüm Başkanı onayladı — {bb_ad}", sub_id)
+    return jsonify({"ok": True, "id": sub_id, "bb_ad": bb_ad, "bb_tarih": bb_tarih})
+
+@app.route("/api/bb/reddet", methods=["POST"])
+@bb_required
+def api_bb_reddet():
+    data   = request.get_json(force=True) or {}
+    sub_id = int(data.get("id", 0))
+    sebep  = data.get("sebep", "")
+    if not sub_id:
+        return jsonify({"ok": False, "hata": "ID gerekli"}), 400
+    with get_db() as c:
+        c.execute("UPDATE submissions SET bb_durum=?, durum=? WHERE id=?",
+                  ("reddedildi", "bb_reddedildi", sub_id))
+    bildirim_ekle("basvuru", f"❌ #{sub_id} Bölüm Başkanı reddetti. {sebep}", sub_id)
+    return jsonify({"ok": True, "id": sub_id})
+
+@app.route("/api/bb/imzali-pdf/<int:sub_id>")
+@login_required
+def api_bb_imzali_pdf(sub_id):
+    row = get_db().execute("SELECT bb_pdf_yolu, bb_durum FROM submissions WHERE id=?", (sub_id,)).fetchone()
+    if not row or row["bb_durum"] != "onaylandi" or not row["bb_pdf_yolu"]:
+        return jsonify({"ok": False, "hata": "İmzalı PDF bulunamadı"}), 404
+    path = Path(row["bb_pdf_yolu"])
+    if not path.exists():
+        return jsonify({"ok": False, "hata": "Dosya mevcut değil"}), 404
+    return send_file(str(path), mimetype="application/pdf",
+                     as_attachment=True,
+                     download_name=f"staj_imzali_{sub_id}.pdf")
+
+@app.route("/api/ogrenci/onaylananlar")
+@login_required
+def api_ogrenci_onaylananlar():
+    """Öğrenci için BB onaylı tüm başvuruları döner."""
+    rows = get_db().execute(
+        "SELECT * FROM submissions WHERE bb_durum='onaylandi' ORDER BY id DESC"
+    ).fetchall()
+    out = []
+    for r in rows:
+        ext = {}
+        try: ext = json.loads(r["extracted_json"] or "{}")
+        except: pass
+        out.append({
+            "id":       r["id"],
+            "durum":    r["durum"],
+            "bb_ad":    r["bb_ad"] or "",
+            "bb_tarih": r["bb_tarih"] or "",
+            "ad":       ext.get("ad_soyad", r["original_adi"] or "—"),
+            "bolum":    ext.get("bolum","—"),
+            "firma":    ext.get("firma_adi","—"),
+            "bas":      ext.get("baslangic_tarihi",""),
+            "bit":      ext.get("bitis_tarihi",""),
+            "gun":      ext.get("staj_gun_sayisi",""),
+        })
+    return jsonify(out)
+
+
+@app.route("/api/sekreter-ilet/<int:sub_id>", methods=["POST"])
+@login_required
+def api_sekreter_ilet(sub_id):
+    """Öğrenci BB onaylı başvurusunu sekretere iletir.
+       BB onayı yoksa 403 döner."""
+    row = get_db().execute(
+        "SELECT durum, bb_durum, extracted_json FROM submissions WHERE id=?", (sub_id,)
+    ).fetchone()
+    if not row:
+        return jsonify({"ok": False, "hata": "Başvuru bulunamadı"}), 404
+
+    if row["bb_durum"] != "onaylandi":
+        return jsonify({
+            "ok": False,
+            "hata": "Bölüm Başkanı onayı olmadan sekretere gönderilemez.",
+            "bb_durum": row["bb_durum"],
+        }), 403
+
+    if row["durum"] not in ("bb_onaylandi",):
+        return jsonify({
+            "ok": False,
+            "hata": f"Bu başvuru zaten işlemde ({row['durum']}).",
+        }), 400
+
+    with get_db() as c:
+        c.execute("UPDATE submissions SET durum=? WHERE id=?", ("sekreter_bekliyor", sub_id))
+
+    ext = {}
+    try: ext = json.loads(row["extracted_json"] or "{}")
+    except: pass
+    ad = ext.get("ad_soyad", f"#{sub_id}")
+    bildirim_ekle("basvuru", f"📨 #{sub_id} sekretere iletildi — {ad}", sub_id)
+
+    # AI otomatik kontrol + onay (e-imza + form + model analizi)
+    kontrol_sonuc = _sekreter_ai_kontrol(sub_id)
+    oto = kontrol_sonuc.get("oto_onaylandi", False)
+    if oto:
+        bildirim_ekle("basvuru", f"🤖 #{sub_id} AI otomatik onayladı — {ad}", sub_id)
+
+    return jsonify({
+        "ok":            True,
+        "id":            sub_id,
+        "oto_onaylandi": oto,
+        "kontroller":    kontrol_sonuc.get("kontroller", {}),
+    })
+
+
+@app.route("/api/basvuru-durum/<int:sub_id>")
+def api_basvuru_durum(sub_id):
+    row = get_db().execute(
+        "SELECT durum, ai_karar, ai_mesaj, bb_durum, bb_ad, bb_tarih FROM submissions WHERE id=?",
+        (sub_id,),
+    ).fetchone()
+    if not row:
+        return jsonify({"ok": False, "hata": "Bulunamadı"}), 404
+    return jsonify({
+        "ok":       True,
+        "durum":    row["durum"],
+        "ai_karar": row["ai_karar"],
+        "ai_mesaj": row["ai_mesaj"],
+        "bb_durum": row["bb_durum"],
+        "bb_ad":    row["bb_ad"],
+        "bb_tarih": row["bb_tarih"],
     })
 
 

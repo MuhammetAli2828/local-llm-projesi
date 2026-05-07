@@ -228,10 +228,43 @@ def _p2_overlay(c, d):
     """Yeni şablon koordinatları (chars analizinden):
        Adı Soyadı  ":" → x=159, baseline y=677
        Görev ve Unvanı ":" → x=159, baseline y=654
+       Bölüm Başkanı tarih ≈ y=532 (orta), ad ≈ y=510
     """
     sv = lambda k: str(d.get(k) or "")
     _val(c, 165, 677, sv("isveren_ad_soyad"), 9)
     _val(c, 165, 654, sv("isveren_unvan"), 9)
+
+    # Bölüm Başkanı e-imza
+    # pdfplumber ölçümleri (staj_belgesi.pdf sayfa 2, H=841.9):
+    #   "Yukarıda..."  rl_top=502.4  rl_bot=491.3
+    #   "…/…/20….."   rl_top=464.3  rl_bot=453.3  x0=269.9  x1=325.6
+    #   "Bölüm Başk."  rl_top=451.7  rl_bot=440.7  x0=263.6  x1=331.8
+    bb_ad    = sv("bb_ad")
+    bb_tarih = sv("bb_tarih")
+    if bb_ad or bb_tarih:
+        cx = W / 2  # 297.5
+
+        # 1. Ad — imza alanı ("Yukarıda" bot 491.3 → tarih top 464.3 arası boşluk)
+        if bb_ad:
+            c.setFillColorRGB(1, 1, 1)
+            c.rect(cx - 95, 467, 190, 21, fill=1, stroke=0)   # 467–488
+            c.setFillGray(0)
+            c.setFont(FONT, 9.5)
+            c.drawCentredString(cx, 476, bb_ad)
+
+        # 2. Tarih — placeholder rl_bot=453.3 → rl_top=464.3, rect 450–468 ile sil
+        if bb_tarih:
+            c.setFillColorRGB(1, 1, 1)
+            c.rect(cx - 80, 450, 160, 18, fill=1, stroke=0)   # 450–468, tam kaplama
+            c.setFillGray(0)
+            c.setFont(FONT, 9.5)
+            c.drawCentredString(cx, 461, bb_tarih)
+
+        # 3. [E-İMZALI] — "Bölüm Başkanı" bot=440.7 altına (y=432)
+        c.setFont(FONT, 7.5)
+        c.setFillColorRGB(0.05, 0.55, 0.05)
+        c.drawCentredString(cx, 432, "[ E-İMZALI ]")
+        c.setFillGray(0)
 
 
 # ── SIFIRDAN PDF (fallback) ───────────────────────────────────────────────────

@@ -4,6 +4,9 @@ loadKurallar();
 if (document.getElementById('tab-sekreter')?.classList.contains('active')) {
   loadBasvurular();
 }
+if (document.getElementById('belgelerim-list')) {
+  loadBelgelerim();
+}
 
 /* ── COLLAPSIBLE ─────────────────────────────────────────────────────────── */
 function toggleSection(head) {
@@ -274,13 +277,26 @@ async function gonderPDF() {
       ? `<div class="gonderme-eksik">⚠️ Eksik alanlar: ${eksikler.join(', ')}</div>` : '';
     resultBox.className = 'yukle-result ' + (isKabul ? 'kabul' : 'red');
     resultBox.innerHTML =
-      `<div class="gonderme-baslik">${isKabul ? '✅ Başvurunuz Onaylandı' : '❌ Başvurunuz Reddedildi'} — #${data.id}</div>` +
+      `<div class="gonderme-baslik">${isKabul ? '✅ AI Değerlendirmesi: Uygun' : '❌ Başvurunuz Reddedildi'} — #${data.id}</div>` +
       `<div class="gonderme-aciklama">${data.mesaj || ''}</div>` +
       `${tarihHtml}${eksikHtml}` +
       `<div class="gonderme-bilgi">${isKabul
-        ? '🎉 Tebrikler! Başvurunuz AI değerlendirmesinde uygun bulundu. Sekreter ek bir gözden geçirme yapabilir.'
+        ? '⏳ Başvurunuz <strong>Bölüm Başkanı onayına</strong> iletildi. BB onayladıktan sonra "Sekretere İlet" butonu aktif olacak.'
         : 'ℹ️ Lütfen eksikleri tamamlayıp yeniden başvurun.'}</div>`;
-    showToast(isKabul ? '✅ Başvurunuz onaylandı!' : '❌ Başvurunuz reddedildi.');
+    showToast(isKabul ? '📨 Bölüm başkanı onayına gönderildi!' : '❌ Başvurunuz reddedildi.');
+
+    // BB durum takip panelini göster
+    if (isKabul && data.id) {
+      const wrap = document.getElementById('bb-durum-wrap');
+      const idEl = document.getElementById('bb-sorgu-id');
+      if (wrap) wrap.style.display = 'block';
+      if (idEl) idEl.value = data.id;
+      _bbSorguId = data.id;
+      renderBBDurum({ bb_durum: 'bekliyor', ai_mesaj: data.mesaj || '' });
+      // 10 saniyede bir otomatik sorgula
+      if (_bbPollTimer) clearInterval(_bbPollTimer);
+      _bbPollTimer = setInterval(() => sorgulaBBDurum(true), 10000);
+    }
   } catch (e) {
     resultBox.style.display = 'block';
     resultBox.className = 'yukle-result red';
@@ -516,8 +532,8 @@ async function loadBasvurular() {
     _allRows   = await res.json();
     const t  = _allRows.length;
     const k  = _allRows.filter(r => r.durum === 'onaylandi').length;
-    const rd = _allRows.filter(r => r.durum === 'reddedildi').length;
-    const b  = _allRows.filter(r => r.durum === 'beklemede').length;
+    const rd = _allRows.filter(r => ['reddedildi','bb_reddedildi'].includes(r.durum)).length;
+    const b  = _allRows.filter(r => r.durum === 'sekreter_bekliyor').length;
     document.getElementById('m-toplam').textContent = t;
     document.getElementById('m-kabul').textContent  = k;
     document.getElementById('m-red').textContent    = rd;
@@ -536,10 +552,14 @@ function renderList(rows) {
     const durum    = r.durum || 'beklemede';
     const aiOneri  = r.ai_karar || '—';
     const bekleyen = durum === 'beklemede';
-    const cardCls  = durum === 'onaylandi' ? 'kabul-card' : durum === 'reddedildi' ? 'red-card' : 'bekle-card';
-    const durumIcon = durum === 'onaylandi' ? '✅' : durum === 'reddedildi' ? '❌' : '⏳';
-    const durumLabel = durum === 'onaylandi' ? 'Onaylandı' : durum === 'reddedildi' ? 'Reddedildi' : 'Beklemede';
-    const durumBadgeCls = durum === 'onaylandi' ? 'kabul' : durum === 'reddedildi' ? 'red' : 'bekle';
+    const isRed    = ['reddedildi','bb_reddedildi'].includes(durum);
+    const cardCls  = durum === 'onaylandi' ? 'kabul-card' : isRed ? 'red-card' : 'bekle-card';
+    const durumIcon = durum === 'onaylandi' ? '✅' : isRed ? '❌' : '⏳';
+    const durumLabel = durum === 'onaylandi' ? 'Onaylandı'
+                     : durum === 'bb_reddedildi' ? 'BB Reddetti'
+                     : isRed ? 'Reddedildi'
+                     : durum === 'sekreter_bekliyor' ? 'Sekreter Bekliyor' : 'Beklemede';
+    const durumBadgeCls = durum === 'onaylandi' ? 'kabul' : isRed ? 'red' : 'bekle';
 
     let ext = {}; try { ext = JSON.parse(r.extracted_json || '{}'); } catch {}
     let eks = []; try { eks = JSON.parse(r.missing_json || '[]'); } catch {}
@@ -583,18 +603,28 @@ function renderList(rows) {
     const raporHtml = r.ai_rapor
       ? `<span class="rapor-toggle" onclick="toggleRapor(${r.id})">📄 AI Ham Yanıtı</span><div id="rapor-${r.id}" class="rapor-text">${r.ai_rapor}</div>` : '';
 
-    // Aksiyon satırı: AI kararı finaldir, sekreter override edebilir
-    const karsiKarar = durum === 'onaylandi' ? 'RED' : 'KABUL';
-    const karsiLabel = durum === 'onaylandi' ? '❌ Reddet' : '✅ Onayla';
-    const aksiyonHtml = `
-      <div class="karar-verildi">
-        ${durum === 'onaylandi'
-          ? '<span style="color:#065f46;font-weight:700;">✅ AI tarafından onaylandı</span>'
-          : durum === 'reddedildi'
-          ? '<span style="color:#991b1b;font-weight:700;">❌ AI tarafından reddedildi</span>'
-          : '<span style="color:#92400e;font-weight:700;">⏳ İşleniyor…</span>'}
-        <button class="btn btn-outline btn-sm" onclick="manuelKarar(${r.id},'${karsiKarar}')">${karsiLabel} (Override)</button>
-      </div>`;
+    // Aksiyon satırı
+    let aksiyonHtml;
+    if (durum === 'onaylandi') {
+      aksiyonHtml = `
+        <div class="karar-verildi" id="action-${r.id}">
+          <span style="color:#065f46;font-weight:700;">✅ Sekreter Onayladı</span>
+          <button class="btn btn-outline btn-sm" onclick="manuelKarar(${r.id},'RED')">❌ Geri Al (Reddet)</button>
+        </div>`;
+    } else if (durum === 'reddedildi') {
+      aksiyonHtml = `
+        <div class="karar-verildi" id="action-${r.id}">
+          <span style="color:#991b1b;font-weight:700;">❌ Reddedildi</span>
+          <button class="btn btn-outline btn-sm" onclick="manuelKarar(${r.id},'KABUL')">✅ Tekrar Onayla</button>
+        </div>`;
+    } else {
+      aksiyonHtml = `
+        <div class="karar-verildi" id="action-${r.id}">
+          <span style="font-size:.82rem;color:#92400e;font-weight:600;">⏳ AI otomatik onaylayamadı — Manuel inceleme gerekiyor</span>
+          <button class="btn btn-success btn-sm" onclick="manuelKarar(${r.id},'KABUL',true)">✅ Onayla (Override)</button>
+          <button class="btn btn-danger btn-sm"  onclick="manuelKarar(${r.id},'RED')">❌ Reddet</button>
+        </div>`;
+    }
 
     return `
     <div class="basvuru-card ${cardCls}" id="card-${r.id}">
@@ -660,15 +690,76 @@ function toggleRapor(id) {
   if (el) el.style.display = el.style.display === 'block' ? 'none' : 'block';
 }
 
-async function manuelKarar(id, karar) {
+async function manuelKarar(id, karar, force) {
+  const actionBox = document.getElementById('action-' + id);
+
+  if (karar === 'RED') {
+    if (actionBox) actionBox.innerHTML = '<span style="color:#92400e;font-size:.85rem;">⏳ Reddediliyor…</span>';
+    try {
+      await fetch('/api/karar', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ id, karar: 'RED' }),
+      });
+      showToast('❌ Reddedildi.');
+      loadBasvurular();
+    } catch(e) { showToast('❌ Hata: ' + e.message); }
+    return;
+  }
+
+  // KABUL — kontroller çalıştır
+  if (actionBox) actionBox.innerHTML =
+    '<span style="color:#1e40af;font-size:.85rem;">⏳ AI kontrolleri çalışıyor…</span>';
+
   try {
-    await fetch('/api/karar', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, karar }),
+    const res  = await fetch('/api/karar', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ id, karar: 'KABUL', force: !!force }),
     });
-    showToast(karar === 'KABUL' ? '✅ Onaylandı!' : '❌ Reddedildi.');
-    loadBasvurular();
-  } catch (e) { showToast('❌ Hata: ' + e.message); }
+    const data = await res.json();
+
+    if (!data.ok) { showToast('❌ ' + (data.hata || 'Hata')); return; }
+
+    if (data.onaylandi) {
+      showToast('✅ Onaylandı!');
+      loadBasvurular();
+      return;
+    }
+
+    // Kontroller geçmedi — sonuçları göster
+    const k = data.kontroller || {};
+    const rows = [
+      ['E-İmza', k.e_imza],
+      ['Form',   k.form],
+      ['AI',     k.ai],
+    ].map(([lbl, c]) => {
+      if (!c) return '';
+      const icon = c.ok ? '✅' : '❌';
+      const color = c.ok ? '#065f46' : '#991b1b';
+      const uyari = (c.uyarilar && c.uyarilar.length)
+        ? `<div style="font-size:.75rem;color:#92400e;margin-top:2px;">⚠️ ${c.uyarilar.join(' · ')}</div>` : '';
+      const guvenHtml = (lbl === 'AI' && c.guven !== undefined)
+        ? ` <span style="font-size:.75rem;color:#64748b;">(güven: ${Math.round(c.guven * 100)}%)</span>` : '';
+      return `<div class="sek-kontrol-row">
+        <span class="sek-kontrol-lbl">${lbl}</span>
+        <span style="color:${color};font-weight:700;">${icon}</span>
+        <span class="sek-kontrol-msg">${_esc(c.mesaj)}${guvenHtml}</span>
+        ${uyari}
+      </div>`;
+    }).join('');
+
+    if (actionBox) actionBox.innerHTML = `
+      <div class="sek-kontrol-panel">
+        <div class="sek-kontrol-baslik">⚠️ Bazı kontroller geçilemedi — Onaylamak için gözden geçirin:</div>
+        ${rows}
+        <div class="sek-kontrol-actions">
+          <button class="btn btn-danger btn-sm" onclick="manuelKarar(${id},'RED')">❌ Reddet</button>
+          <button class="btn btn-warning btn-sm" onclick="manuelKarar(${id},'KABUL',true)">⚡ Yine de Onayla (Override)</button>
+        </div>
+      </div>`;
+  } catch(e) {
+    showToast('❌ Hata: ' + e.message);
+    if (actionBox) actionBox.innerHTML = `<span style="color:#dc2626;">❌ ${_esc(e.message)}</span>`;
+  }
 }
 
 function exportCSV() {
@@ -1344,6 +1435,196 @@ async function raporKarar(id, durum) {
   });
   showToast(durum === 'incelendi' ? '✅ Rapor incelendi.' : '❌ Rapor reddedildi.');
   loadRaporlar();
+}
+
+/* ── BÖLÜM BAŞKANI DURUM TAKİP ───────────────────────────────────────────── */
+let _bbSorguId   = null;
+let _bbPollTimer = null;
+
+function renderBBDurum(data) {
+  const box    = document.getElementById('bb-status-box');
+  const btnSek = document.getElementById('btn-sekreter-ilet');
+  if (!box) return;
+  const d = data.bb_durum;
+
+  if (!d || d === 'bekliyor') {
+    box.className = 'bb-status-card bekliyor';
+    box.innerHTML = '⏳ <strong>Bölüm Başkanı onayı bekleniyor…</strong><br>'
+      + '<span style="font-size:.8rem;color:#92400e;">BB formu inceleyip e-imzalayana kadar bekleyin.</span>';
+    if (btnSek) btnSek.style.display = 'none';
+
+  } else if (d === 'onaylandi') {
+    const id = _bbSorguId || document.getElementById('bb-sorgu-id')?.value;
+    box.className = 'bb-status-card onaylandi';
+    box.innerHTML = `✅ <strong>Bölüm Başkanı Onayladı!</strong> — ${data.bb_ad || ''} (${data.bb_tarih || ''})<br>`
+      + `<a href="/api/bb/imzali-pdf/${id}" class="btn btn-outline btn-sm" style="margin-top:8px;" download>📥 İmzalı PDF İndir</a>`;
+    // Sekreter ilet butonunu aktif et
+    if (btnSek) {
+      btnSek.style.display = 'inline-flex';
+      btnSek.disabled = (data.durum === 'sekreter_bekliyor' || data.durum === 'onaylandi' || data.durum === 'reddedildi');
+      if (data.durum === 'sekreter_bekliyor')
+        btnSek.innerHTML = '✅ Sekretere İletildi';
+    }
+    if (_bbPollTimer) { clearInterval(_bbPollTimer); _bbPollTimer = null; }
+    loadBelgelerim();
+
+  } else if (d === 'reddedildi') {
+    box.className = 'bb-status-card reddedildi';
+    box.innerHTML = '❌ <strong>Bölüm Başkanı Reddetti.</strong><br>'
+      + '<span style="font-size:.8rem;">Eksikleri tamamlayıp yeniden başvurun.</span>';
+    if (btnSek) btnSek.style.display = 'none';
+    if (_bbPollTimer) { clearInterval(_bbPollTimer); _bbPollTimer = null; }
+  }
+}
+
+async function iletSekreter() {
+  const id  = _bbSorguId || document.getElementById('bb-sorgu-id')?.value;
+  const btn = document.getElementById('btn-sekreter-ilet');
+  if (!id) { showToast('⚠️ Başvuru No bulunamadı.'); return; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ İletiliyor…'; }
+  try {
+    const res  = await fetch(`/api/sekreter-ilet/${id}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      if (btn) { btn.disabled = true; btn.innerHTML = '✅ İletildi'; }
+      const box = document.getElementById('bb-status-box');
+      const oto = data.oto_onaylandi;
+      if (box) {
+        const k = data.kontroller || {};
+        const satirlar = [['E-İmza',k.e_imza],['Form',k.form],['AI',k.ai]].map(([lbl,c]) => {
+          if (!c) return '';
+          return `<div style="font-size:.78rem;">${c.ok?'✅':'❌'} <strong>${lbl}:</strong> ${_esc(c.mesaj)}</div>`;
+        }).join('');
+        const renk  = oto ? '#065f46' : '#92400e';
+        const mesaj = oto ? '🤖 Model otomatik onayladı ✅' : '⚠️ Otomatik onay başarısız — Sekreter inceleyecek';
+        box.innerHTML += `<div style="margin-top:10px;padding:10px 12px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;">
+          <div style="font-weight:700;color:${renk};margin-bottom:6px;">${mesaj}</div>
+          ${satirlar}
+        </div>`;
+      }
+      showToast(oto ? '🤖 AI otomatik onayladı!' : '📨 Sekretere iletildi, manuel inceleme gerekiyor.');
+    } else {
+      showToast('❌ ' + (data.hata || 'Hata'));
+      if (btn) { btn.disabled = false; btn.innerHTML = '🚀 Sekretere İlet'; }
+    }
+  } catch (e) {
+    showToast('❌ ' + e.message);
+    if (btn) { btn.disabled = false; btn.innerHTML = '🚀 Sekretere İlet'; }
+  }
+}
+
+async function sorgulaBBDurum(sessiz = false) {
+  const idEl = document.getElementById('bb-sorgu-id');
+  const id   = idEl?.value || _bbSorguId;
+  if (!id) { if (!sessiz) showToast('⚠️ Başvuru No girin.'); return; }
+  _bbSorguId = id;
+  try {
+    const res  = await fetch(`/api/basvuru-durum/${id}`);
+    const data = await res.json();
+    if (!data.ok) { if (!sessiz) showToast('❌ ' + (data.hata || 'Bulunamadı')); return; }
+    const wrap = document.getElementById('bb-durum-wrap');
+    if (wrap) wrap.style.display = 'block';
+    renderBBDurum(data);
+  } catch(e) { if (!sessiz) showToast('❌ ' + e.message); }
+}
+
+/* ── ONAYLANMIŞ BELGELERİM ───────────────────────────────────────────────── */
+async function loadBelgelerim() {
+  const list = document.getElementById('belgelerim-list');
+  if (!list) return;
+  list.innerHTML = '<div class="belge-empty">⏳ Yükleniyor…</div>';
+  try {
+    const res  = await fetch('/api/ogrenci/onaylananlar');
+    const rows = await res.json();
+    if (!rows.length) {
+      list.innerHTML = '<div class="belge-empty">📭 Henüz onaylanmış belge yok.</div>';
+      return;
+    }
+    list.innerHTML = rows.map(r => {
+      const iletildi = r.durum === 'sekreter_bekliyor' || r.durum === 'onaylandi';
+      const iletBtn  = iletildi
+        ? `<button class="btn btn-outline btn-sm" disabled>✅ Sekretere İletildi</button>`
+        : `<button class="btn btn-primary btn-sm" onclick="belgeyiIlet(${r.id}, this)">🚀 Sekretere İlet</button>`;
+      return `
+      <div class="belge-card" id="belge-${r.id}">
+        <div class="belge-card-top">
+          <div>
+            <div class="belge-ad">${_esc(r.ad)}</div>
+            <div class="belge-meta">#${r.id} · ${_esc(r.firma)} · ${_esc(r.bolum)}</div>
+            <div class="belge-tarih">${_esc(r.bas)} – ${_esc(r.bit)} (${_esc(r.gun)} gün)</div>
+          </div>
+          <div class="belge-badge-wrap">
+            <span class="bb-onay-badge">✅ BB: ${_esc(r.bb_ad)} (${_esc(r.bb_tarih)})</span>
+          </div>
+        </div>
+        <div class="belge-card-actions">
+          <a href="/api/bb/imzali-pdf/${r.id}" class="btn btn-outline btn-sm" download>📥 İmzalı PDF İndir</a>
+          ${iletBtn}
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<div class="belge-empty">❌ Hata: ${e.message}</div>`;
+  }
+}
+
+async function belgeyiIlet(id, btn) {
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ AI kontrol ediliyor…'; }
+  const card = document.getElementById('belge-' + id);
+  try {
+    const res  = await fetch(`/api/sekreter-ilet/${id}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      _renderSekreterAiSonuc(card, id, data);
+    } else {
+      showToast('❌ ' + (data.hata || 'Hata'));
+      if (btn) { btn.disabled = false; btn.innerHTML = '🚀 Sekretere İlet'; }
+    }
+  } catch(e) {
+    showToast('❌ ' + e.message);
+    if (btn) { btn.disabled = false; btn.innerHTML = '🚀 Sekretere İlet'; }
+  }
+}
+
+function _renderSekreterAiSonuc(card, id, data) {
+  const k = data.kontroller || {};
+  const oto = data.oto_onaylandi;
+  const satirlar = [
+    ['E-İmza', k.e_imza],
+    ['Form',   k.form],
+    ['AI',     k.ai],
+  ].map(([lbl, c]) => {
+    if (!c) return '';
+    const icon  = c.ok ? '✅' : '❌';
+    const color = c.ok ? '#065f46' : '#991b1b';
+    const guv   = (lbl === 'AI' && c.guven !== undefined)
+      ? ` <span style="font-size:.75rem;color:#64748b;">(güven: ${Math.round(c.guven*100)}%)</span>` : '';
+    const uyari = (c.uyarilar && c.uyarilar.length)
+      ? `<div style="font-size:.74rem;color:#92400e;margin-top:1px;">⚠️ ${c.uyarilar.join(' · ')}</div>` : '';
+    return `<div class="sek-kontrol-row">
+      <span class="sek-kontrol-lbl">${lbl}</span>
+      <span style="color:${color};font-weight:700;">${icon}</span>
+      <span class="sek-kontrol-msg">${_esc(c.mesaj)}${guv}</span>${uyari}
+    </div>`;
+  }).join('');
+
+  const sonucHtml = oto
+    ? `<div style="background:#d1fae5;border:1.5px solid #6ee7b7;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:.84rem;color:#065f46;font-weight:700;">
+        🤖 Model otomatik onayladı ✅
+       </div>`
+    : `<div style="background:#fef9c3;border:1.5px solid #fcd34d;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:.84rem;color:#92400e;font-weight:700;">
+        ⚠️ Otomatik onay başarısız — Sekreter manuel inceleyecek
+       </div>`;
+
+  if (card) {
+    const actionsEl = card.querySelector('.belge-card-actions');
+    if (actionsEl) actionsEl.innerHTML = `
+      <div style="width:100%">
+        ${sonucHtml}
+        <div class="sek-kontrol-panel" style="margin-top:4px;">${satirlar}</div>
+      </div>`;
+  }
+  showToast(oto ? '🤖 AI otomatik onayladı!' : '📨 Sekretere iletildi, manuel inceleme gerekiyor.');
 }
 
 /* ── TOAST ────────────────────────────────────────────────────────────────── */

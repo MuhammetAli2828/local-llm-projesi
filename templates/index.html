@@ -5,6 +5,30 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Amasya MYO — Staj Asistanı</title>
 <link rel="stylesheet" href="/static/style.css">
+<style>
+.bb-status-card { padding:12px 16px; border-radius:10px; font-size:.87rem; border:1.5px solid; }
+.bb-status-card.bekliyor  { background:#fef9c3; border-color:#fcd34d; color:#78350f; }
+.bb-status-card.onaylandi { background:#d1fae5; border-color:#6ee7b7; color:#065f46; }
+.bb-status-card.reddedildi{ background:#fee2e2; border-color:#fca5a5; color:#991b1b; }
+.sek-kontrol-panel { background:#fffbeb; border:1.5px solid #fcd34d; border-radius:10px; padding:12px 14px; }
+.sek-kontrol-baslik { font-size:.83rem; font-weight:700; color:#92400e; margin-bottom:8px; }
+.sek-kontrol-row { display:grid; grid-template-columns:60px 22px 1fr; gap:4px 8px; align-items:start; font-size:.83rem; margin-bottom:4px; }
+.sek-kontrol-lbl { font-weight:700; color:var(--gray-600); }
+.sek-kontrol-msg { color:var(--gray-700); }
+.sek-kontrol-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; padding-top:8px; border-top:1px solid #fde68a; }
+.btn-warning { background:#f59e0b; color:#fff; border-color:#f59e0b; }
+.btn-warning:hover { background:#d97706; }
+.belgelerim-list { padding:12px 16px; display:flex; flex-direction:column; gap:10px; }
+.belge-empty { text-align:center; padding:24px; color:var(--gray-400); font-size:.88rem; }
+.belge-card  { border:1.5px solid var(--gray-200); border-radius:10px; overflow:hidden; background:#fff; }
+.belge-card-top { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:12px 14px 8px; }
+.belge-ad    { font-weight:700; font-size:.95rem; color:var(--gray-800); }
+.belge-meta  { font-size:.8rem; color:var(--gray-500); margin-top:2px; }
+.belge-tarih { font-size:.78rem; color:var(--gray-400); margin-top:1px; }
+.belge-badge-wrap { flex-shrink:0; }
+.bb-onay-badge { display:inline-flex; align-items:center; gap:5px; background:#d1fae5; color:#065f46; padding:3px 10px; border-radius:20px; font-size:.78rem; font-weight:700; }
+.belge-card-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 14px 12px; border-top:1px solid var(--gray-100); }
+</style>
 </head>
 <body>
 
@@ -150,12 +174,34 @@
               <span>📂</span> PDF Seç
             </button>
             <span id="file-name" class="file-name">Dosya seçilmedi</span>
-            <button id="btn-gonder" class="btn btn-success" onclick="gonderPDF()" disabled>
-              <span>🚀</span> Sekretere Gönder
+            <button id="btn-gonder" class="btn btn-primary" onclick="gonderPDF()" disabled>
+              <span>🎓</span> BB Onayına Gönder
             </button>
           </div>
         </div>
         <div id="yukle-result" class="yukle-result" style="display:none"></div>
+
+        <!-- BB Durum Takip (onay beklerken) -->
+        <div id="bb-durum-wrap" style="display:none;margin-top:12px;">
+          <div class="bb-status-card" id="bb-status-box"></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
+            <span style="font-size:.82rem;color:var(--gray-500);">Başvuru No:</span>
+            <input type="number" id="bb-sorgu-id" placeholder="Örn: 5" min="1"
+                   style="width:80px;padding:6px 10px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:.85rem;">
+            <button class="btn btn-outline btn-sm" onclick="sorgulaBBDurum()">🔍 Durumu Sorgula</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ONAYLANMIŞ BELGELERİM -->
+      <div class="card mt">
+        <div class="card-head" style="display:flex;align-items:center;justify-content:space-between;">
+          <span>✅ Onaylanmış Belgelerim</span>
+          <button class="btn btn-outline btn-sm" onclick="loadBelgelerim()">🔄 Yenile</button>
+        </div>
+        <div id="belgelerim-list" class="belgelerim-list">
+          <div class="belge-empty">⏳ Yükleniyor…</div>
+        </div>
       </div>
 
       <!-- STAJ RAPORU YÜKLEME -->
