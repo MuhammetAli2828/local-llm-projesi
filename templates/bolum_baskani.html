@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bölüm Başkanı Paneli — Amasya MYO</title>
+<title>Department Head Panel — Amasya MYO</title>
 <link rel="stylesheet" href="/static/style.css">
 <style>
   body { background: var(--gray-50); }
@@ -48,18 +48,18 @@
 <div class="bb-wrap">
   <div class="bb-header">
     <div>
-      <div class="bb-title">🎓 Bölüm Başkanı Paneli</div>
-      <div class="bb-sub">Hoş geldiniz, <strong>{{ username }}</strong></div>
+      <div class="bb-title">🎓 Department Head Panel</div>
+      <div class="bb-sub">Welcome, <strong>{{ username }}</strong></div>
     </div>
     <div style="display:flex;gap:10px;align-items:center;">
-      <span id="bekleyen-count">— bekliyor</span>
-      <button class="btn btn-outline btn-sm" onclick="yukleBekleyenler()">🔄 Yenile</button>
-      <a href="/logout" class="btn btn-outline btn-sm">Çıkış</a>
+      <span id="bekleyen-count">— pending</span>
+      <button class="btn btn-outline btn-sm" onclick="yukleBekleyenler()">🔄 Refresh</button>
+      <a href="/logout" class="btn btn-outline btn-sm">Sign Out</a>
     </div>
   </div>
 
   <div id="bb-list">
-    <div class="bb-empty">⏳ Yükleniyor…</div>
+    <div class="bb-empty">⏳ Loading…</div>
   </div>
 </div>
 
@@ -74,15 +74,15 @@ function toast(msg) {
 
 async function yukleBekleyenler() {
   const list = document.getElementById('bb-list');
-  list.innerHTML = '<div class="bb-empty">⏳ Yükleniyor…</div>';
+  list.innerHTML = '<div class="bb-empty">⏳ Loading…</div>';
   try {
     const res  = await fetch('/api/bb/bekleyenler');
     const rows = await res.json();
     const cnt  = document.getElementById('bekleyen-count');
-    cnt.textContent = rows.length + ' bekliyor';
+    cnt.textContent = rows.length + ' pending';
 
     if (!rows.length) {
-      list.innerHTML = '<div class="bb-empty">✅ Onay bekleyen başvuru yok.</div>';
+      list.innerHTML = '<div class="bb-empty">✅ No applications awaiting approval.</div>';
       return;
     }
 
@@ -94,9 +94,9 @@ async function yukleBekleyenler() {
               <span class="bb-id">#${r.id}</span>
               <span class="bb-name">${esc(r.ad)}</span>
               ${r.ai_karar === 'KABUL'
-                ? '<span style="background:#d1fae5;color:#065f46;font-size:.74rem;font-weight:700;padding:2px 8px;border-radius:20px;">🤖 AI: Uygun</span>'
+                ? '<span style="background:#d1fae5;color:#065f46;font-size:.74rem;font-weight:700;padding:2px 8px;border-radius:20px;">🤖 AI: Suitable</span>'
                 : r.ai_karar === 'RED'
-                ? '<span style="background:#fee2e2;color:#991b1b;font-size:.74rem;font-weight:700;padding:2px 8px;border-radius:20px;">🤖 AI: Dikkat</span>'
+                ? '<span style="background:#fee2e2;color:#991b1b;font-size:.74rem;font-weight:700;padding:2px 8px;border-radius:20px;">🤖 AI: Attention</span>'
                 : ''}
             </div>
             <div class="bb-meta">${esc(r.tarih)} · ${esc(r.firma)} · ${esc(r.bolum)}</div>
@@ -105,25 +105,25 @@ async function yukleBekleyenler() {
         </div>
         <div class="bb-body" id="bbb-${r.id}">
           <div class="bb-info-grid">
-            <div class="bb-info-row"><strong>Firma:</strong>${esc(r.firma)}</div>
-            <div class="bb-info-row"><strong>Bölüm:</strong>${esc(r.bolum)}</div>
-            <div class="bb-info-row"><strong>Başlangıç:</strong>${esc(r.bas)}</div>
-            <div class="bb-info-row"><strong>Bitiş:</strong>${esc(r.bit)}</div>
-            <div class="bb-info-row"><strong>Gün:</strong>${esc(r.gun)}</div>
+            <div class="bb-info-row"><strong>Company:</strong>${esc(r.firma)}</div>
+            <div class="bb-info-row"><strong>Department:</strong>${esc(r.bolum)}</div>
+            <div class="bb-info-row"><strong>Start:</strong>${esc(r.bas)}</div>
+            <div class="bb-info-row"><strong>End:</strong>${esc(r.bit)}</div>
+            <div class="bb-info-row"><strong>Days:</strong>${esc(r.gun)}</div>
           </div>
-          ${r.ai_mesaj ? `<div class="bb-ai-msg">🤖 AI Notu: ${esc(r.ai_mesaj)}</div>` : ''}
+          ${r.ai_mesaj ? `<div class="bb-ai-msg">🤖 AI Note: ${esc(r.ai_mesaj)}</div>` : ''}
           <div class="bb-actions" id="act-${r.id}">
             <input type="text" class="bb-name-input" id="bbad-${r.id}"
-                   placeholder="Adınız Soyadınız" value="{{ username }}">
-            <button class="btn btn-success" onclick="onayla(${r.id})">✅ Onayla (E-İmzala)</button>
-            <button class="btn btn-danger" onclick="reddet(${r.id})">❌ Reddet</button>
-            <a href="/api/basvuru/${r.id}/pdf" target="_blank" class="btn btn-outline btn-sm">📄 Orijinal PDF</a>
+                   placeholder="Your Full Name" value="{{ username }}">
+            <button class="btn btn-success" onclick="onayla(${r.id})">✅ Approve (E-Sign)</button>
+            <button class="btn btn-danger" onclick="reddet(${r.id})">❌ Reject</button>
+            <a href="/api/basvuru/${r.id}/pdf" target="_blank" class="btn btn-outline btn-sm">📄 Original PDF</a>
           </div>
         </div>
       </div>`
     ).join('');
   } catch(e) {
-    list.innerHTML = `<div class="bb-empty">❌ Hata: ${e.message}</div>`;
+    list.innerHTML = `<div class="bb-empty">❌ Error: ${e.message}</div>`;
   }
 }
 
@@ -138,9 +138,9 @@ function esc(s) {
 
 async function onayla(id) {
   const ad = document.getElementById('bbad-' + id)?.value.trim();
-  if (!ad) { toast('⚠️ Adınızı girin.'); return; }
+  if (!ad) { toast('⚠️ Please enter your name.'); return; }
   const btn = document.querySelector(`#act-${id} .btn-success`);
-  btn.disabled = true; btn.textContent = '⏳ İmzalanıyor…';
+  btn.disabled = true; btn.textContent = '⏳ Signing…';
   try {
     const res  = await fetch('/api/bb/onayla', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -149,21 +149,21 @@ async function onayla(id) {
     const data = await res.json();
     if (data.ok) {
       document.getElementById('act-' + id).innerHTML = `
-        <span class="bb-onay-badge">✅ Onaylandı — ${esc(data.bb_tarih)}</span>
-        <a href="/api/bb/imzali-pdf/${id}" class="btn btn-primary btn-sm">📥 İmzalı PDF İndir</a>`;
-      toast('✅ #' + id + ' onaylandı ve PDF imzalandı!');
+        <span class="bb-onay-badge">✅ Approved — ${esc(data.bb_tarih)}</span>
+        <a href="/api/bb/imzali-pdf/${id}" class="btn btn-primary btn-sm">📥 Download Signed PDF</a>`;
+      toast('✅ #' + id + ' approved and PDF signed!');
     } else {
-      toast('❌ ' + (data.hata || 'Hata'));
-      btn.disabled = false; btn.textContent = '✅ Onayla (E-İmzala)';
+      toast('❌ ' + (data.hata || 'Error'));
+      btn.disabled = false; btn.textContent = '✅ Approve (E-Sign)';
     }
   } catch(e) {
     toast('❌ ' + e.message);
-    btn.disabled = false; btn.textContent = '✅ Onayla (E-İmzala)';
+    btn.disabled = false; btn.textContent = '✅ Approve (E-Sign)';
   }
 }
 
 async function reddet(id) {
-  const sebep = prompt('Red sebebi (isteğe bağlı):') || '';
+  const sebep = prompt('Rejection reason (optional):') || '';
   const res  = await fetch('/api/bb/reddet', {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({id, sebep}),
@@ -171,8 +171,8 @@ async function reddet(id) {
   const data = await res.json();
   if (data.ok) {
     document.getElementById('act-' + id).innerHTML =
-      `<span class="bb-red-badge">❌ Reddedildi</span>`;
-    toast('❌ #' + id + ' reddedildi.');
+      `<span class="bb-red-badge">❌ Rejected</span>`;
+    toast('❌ #' + id + ' rejected.');
   }
 }
 

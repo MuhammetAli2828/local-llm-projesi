@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Amasya MYO — Staj Asistanı</title>
+<title>Amasya MYO — Internship Assistant</title>
 <link rel="stylesheet" href="/static/style.css">
 <style>
 .bb-status-card { padding:12px 16px; border-radius:10px; font-size:.87rem; border:1.5px solid; }
@@ -39,187 +39,187 @@
       <span class="logo-icon">🎓</span>
       <div>
         <div class="logo-title">Amasya MYO</div>
-        <div class="logo-sub">Staj Başvuru Asistanı</div>
+        <div class="logo-sub">Internship Application Assistant</div>
       </div>
     </div>
     <div class="header-right">
       <span class="role-badge">
-        {% if role == "sekreter" %}🗂️ Sekreter{% else %}👨‍🎓 Öğrenci{% endif %}
+        {% if role == "sekreter" %}🗂️ Secretary{% else %}👨‍🎓 Student{% endif %}
       </span>
       {% if role == "sekreter" %}
       <div class="notif-wrap" onclick="toggleBildirimler()">
-        <button class="notif-btn" title="Bildirimler">🔔</button>
+        <button class="notif-btn" title="Notifications">🔔</button>
         <span class="notif-badge" id="notif-badge" style="display:none">0</span>
         <div class="notif-dropdown" id="notif-dropdown" style="display:none">
           <div class="notif-header">
-            <span>Bildirimler</span>
-            <button onclick="tumunuOku(event)" class="notif-read-all">Tümünü okundu işaretle</button>
+            <span>Notifications</span>
+            <button onclick="tumunuOku(event)" class="notif-read-all">Mark all as read</button>
           </div>
-          <div id="notif-list" class="notif-list">Yükleniyor…</div>
+          <div id="notif-list" class="notif-list">Loading…</div>
         </div>
       </div>
       {% endif %}
-      <a href="/logout" class="btn btn-outline btn-sm">Çıkış</a>
+      <a href="/logout" class="btn btn-outline btn-sm">Sign Out</a>
     </div>
   </div>
 </header>
 
-<!-- ══════════════════ ÖĞRENCİ PANELİ ══════════════════ -->
+<!-- ══════════════════ STUDENT PANEL ══════════════════ -->
 <div id="tab-ogrenci" class="panel{% if role == 'ogrenci' %} active{% endif %}"
      style="{% if role != 'ogrenci' %}display:none{% endif %}">
 
-  <!-- DÖNEM BANNERI — split dışında -->
+  <!-- PERIOD BANNER — outside the split -->
   <div id="donem-banner" class="donem-banner" style="display:none"></div>
 
   <div class="split3">
 
-    <!-- SOL: kurallar + form kontrolü -->
+    <!-- LEFT: rules + form check -->
     <aside class="sidebar">
       <div class="card">
-        <div class="card-head">📋 Kurum Kuralları</div>
+        <div class="card-head">📋 Institution Rules</div>
         <div id="kurallar-list" class="rules-list">
           <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
         </div>
       </div>
 
       <div class="card mt">
-        <div class="card-head">🔍 Canlı Form Kontrolü</div>
+        <div class="card-head">🔍 Live Form Check</div>
         <div id="feedback-box" class="feedback-box">
-          <div class="fb-item info">ℹ️ Formu doldurmaya başlayın…</div>
+          <div class="fb-item info">ℹ️ Start filling out the form…</div>
         </div>
       </div>
     </aside>
 
-    <!-- ORTA: FORM -->
+    <!-- CENTER: FORM -->
     <main class="form-area">
       <div class="card">
-        <div class="card-head">👤 Öğrenci Bilgileri</div>
+        <div class="card-head">👤 Student Information</div>
         <div class="form-grid">
-          <div class="field"><label>Ad Soyad <span class="req">*</span></label>
-            <input type="text" id="ad_soyad" placeholder="Örn: Ahmet Yılmaz"></div>
-          <div class="field"><label>Öğrenci No <span class="req">*</span></label>
-            <input type="text" id="ogrenci_no" placeholder="Örn: 20210001"></div>
-          <div class="field"><label>Bölüm / Program <span class="req">*</span></label>
-            <input type="text" id="bolum" placeholder="Örn: Bilgisayar Teknolojisi"></div>
-          <div class="field"><label>TC Kimlik No <span class="req">*</span></label>
-            <input type="text" id="tc_kimlik_no" maxlength="11" placeholder="11 haneli TC"></div>
-          <div class="field"><label>Eğitim Dönemi</label>
-            <select id="donem"><option>Güz</option><option>Bahar</option></select></div>
-          <div class="field"><label>Telefon No</label>
+          <div class="field"><label>Full Name <span class="req">*</span></label>
+            <input type="text" id="ad_soyad" placeholder="e.g. John Smith"></div>
+          <div class="field"><label>Student No <span class="req">*</span></label>
+            <input type="text" id="ogrenci_no" placeholder="e.g. 20210001"></div>
+          <div class="field"><label>Department / Program <span class="req">*</span></label>
+            <input type="text" id="bolum" placeholder="e.g. Computer Technology"></div>
+          <div class="field"><label>National ID No <span class="req">*</span></label>
+            <input type="text" id="tc_kimlik_no" maxlength="11" placeholder="11-digit ID"></div>
+          <div class="field"><label>Academic Term</label>
+            <select id="donem"><option>Fall</option><option>Spring</option></select></div>
+          <div class="field"><label>Phone Number</label>
             <input type="text" id="telefon_no" placeholder="05XX XXX XX XX"></div>
-          <div class="field full"><label>İkametgah Adresi</label>
-            <input type="text" id="ikametgah_adresi" placeholder="Tam adres…"></div>
+          <div class="field full"><label>Home Address</label>
+            <input type="text" id="ikametgah_adresi" placeholder="Full address…"></div>
         </div>
       </div>
 
       <div class="card mt">
-        <div class="card-head">🏢 Staj Bilgileri</div>
+        <div class="card-head">🏢 Internship Information</div>
         <div class="form-grid">
-          <div class="field full"><label>Firma Adı <span class="req">*</span></label>
-            <input type="text" id="firma_adi" placeholder="Örn: ABC Mühendislik A.Ş."></div>
-          <div class="field full"><label>Firma Adresi <span class="req">*</span></label>
-            <input type="text" id="firma_adresi" placeholder="Tam adres…"></div>
-          <div class="field"><label>Hizmet Alanı</label>
-            <input type="text" id="hizmet_alani" placeholder="Örn: Yazılım Geliştirme"></div>
-          <div class="field"><label>Haftalık Çalışma Günü</label>
+          <div class="field full"><label>Company Name <span class="req">*</span></label>
+            <input type="text" id="firma_adi" placeholder="e.g. ABC Engineering Inc."></div>
+          <div class="field full"><label>Company Address <span class="req">*</span></label>
+            <input type="text" id="firma_adresi" placeholder="Full address…"></div>
+          <div class="field"><label>Service Area</label>
+            <input type="text" id="hizmet_alani" placeholder="e.g. Software Development"></div>
+          <div class="field"><label>Weekly Working Days</label>
             <input type="number" id="haftalik_calisilan_gun" min="1" max="7" value="5"></div>
-          <div class="field"><label>Firma Telefon</label>
+          <div class="field"><label>Company Phone</label>
             <input type="text" id="firma_telefon" placeholder="0312 XXX XX XX"></div>
-          <div class="field"><label>Firma E-posta</label>
-            <input type="email" id="firma_eposta" placeholder="info@firma.com"></div>
-          <div class="field"><label>Firma Web</label>
-            <input type="text" id="firma_web" placeholder="www.firma.com"></div>
-          <div class="field"><label>Firma Fax</label>
+          <div class="field"><label>Company Email</label>
+            <input type="email" id="firma_eposta" placeholder="info@company.com"></div>
+          <div class="field"><label>Company Website</label>
+            <input type="text" id="firma_web" placeholder="www.company.com"></div>
+          <div class="field"><label>Company Fax</label>
             <input type="text" id="firma_fax"></div>
-          <div class="field"><label>Başlangıç Tarihi <span class="req">*</span></label>
+          <div class="field"><label>Start Date <span class="req">*</span></label>
             <input type="date" id="baslangic_tarihi"></div>
-          <div class="field"><label>Bitiş Tarihi <span class="req">*</span></label>
+          <div class="field"><label>End Date <span class="req">*</span></label>
             <input type="date" id="bitis_tarihi"></div>
           <div class="field full">
             <div id="tarih-hesap" class="tarih-hesap" style="display:none"></div>
           </div>
-          <div class="field"><label>Staj Gün Sayısı <span class="req">*</span></label>
-            <input type="number" id="staj_gun_sayisi" min="1" placeholder="Örn: 30"></div>
+          <div class="field"><label>Number of Internship Days <span class="req">*</span></label>
+            <input type="number" id="staj_gun_sayisi" min="1" placeholder="e.g. 30"></div>
         </div>
       </div>
 
       <div class="card mt collapsible">
         <div class="card-head toggle-head" onclick="toggleSection(this)">
-          🏭 Departman Bilgileri <span class="toggle-arrow">▾</span>
+          🏭 Department Information <span class="toggle-arrow">▾</span>
         </div>
         <div class="collapsible-body form-grid" style="display:none">
-          <div class="field"><label>Departman 1</label><input type="text" id="departman_1"></div>
-          <div class="field"><label>Departman 2</label><input type="text" id="departman_2"></div>
-          <div class="field"><label>Departman 3</label><input type="text" id="departman_3"></div>
-          <div class="field"><label>Departman 4</label><input type="text" id="departman_4"></div>
-          <div class="field"><label>Yönetici Sayısı</label><input type="number" id="personel_yonetici" min="0" value="0"></div>
-          <div class="field"><label>Mühendis Sayısı</label><input type="number" id="personel_muhendis" min="0" value="0"></div>
-          <div class="field"><label>Tekniker Sayısı</label><input type="number" id="personel_tekniker" min="0" value="0"></div>
-          <div class="field"><label>Usta Sayısı</label><input type="number" id="personel_usta" min="0" value="0"></div>
-          <div class="field"><label>Teknisyen Sayısı</label><input type="number" id="personel_teknisyen" min="0" value="0"></div>
-          <div class="field"><label>İşçi Sayısı</label><input type="number" id="personel_isci" min="0" value="0"></div>
+          <div class="field"><label>Department 1</label><input type="text" id="departman_1"></div>
+          <div class="field"><label>Department 2</label><input type="text" id="departman_2"></div>
+          <div class="field"><label>Department 3</label><input type="text" id="departman_3"></div>
+          <div class="field"><label>Department 4</label><input type="text" id="departman_4"></div>
+          <div class="field"><label>Number of Managers</label><input type="number" id="personel_yonetici" min="0" value="0"></div>
+          <div class="field"><label>Number of Engineers</label><input type="number" id="personel_muhendis" min="0" value="0"></div>
+          <div class="field"><label>Number of Technicians</label><input type="number" id="personel_tekniker" min="0" value="0"></div>
+          <div class="field"><label>Number of Craftsmen</label><input type="number" id="personel_usta" min="0" value="0"></div>
+          <div class="field"><label>Number of Technicians (Vocational)</label><input type="number" id="personel_teknisyen" min="0" value="0"></div>
+          <div class="field"><label>Number of Workers</label><input type="number" id="personel_isci" min="0" value="0"></div>
         </div>
       </div>
 
-      <!-- PDF BUTONLARI -->
+      <!-- PDF BUTTONS -->
       <div class="card mt">
-        <div class="card-head">📄 PDF İşlemleri</div>
+        <div class="card-head">📄 PDF Operations</div>
         <div class="pdf-actions">
           <button id="btn-pdf" class="btn btn-primary" onclick="generatePDF()">
-            <span>📥</span> PDF Oluştur & İndir
+            <span>📥</span> Create & Download PDF
           </button>
           <div class="upload-area" id="upload-area">
             <input type="file" id="pdf-file" accept=".pdf" hidden>
             <button class="btn btn-outline" onclick="document.getElementById('pdf-file').click()">
-              <span>📂</span> PDF Seç
+              <span>📂</span> Select PDF
             </button>
-            <span id="file-name" class="file-name">Dosya seçilmedi</span>
+            <span id="file-name" class="file-name">No file selected</span>
             <button id="btn-gonder" class="btn btn-primary" onclick="gonderPDF()" disabled>
-              <span>🎓</span> BB Onayına Gönder
+              <span>🎓</span> Send for Department Head Approval
             </button>
           </div>
         </div>
         <div id="yukle-result" class="yukle-result" style="display:none"></div>
 
-        <!-- BB Durum Takip (onay beklerken) -->
+        <!-- Department Head Status Tracking (while awaiting approval) -->
         <div id="bb-durum-wrap" style="display:none;margin-top:12px;">
           <div class="bb-status-card" id="bb-status-box"></div>
           <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;">
-            <span style="font-size:.82rem;color:var(--gray-500);">Başvuru No:</span>
-            <input type="number" id="bb-sorgu-id" placeholder="Örn: 5" min="1"
+            <span style="font-size:.82rem;color:var(--gray-500);">Application No:</span>
+            <input type="number" id="bb-sorgu-id" placeholder="e.g. 5" min="1"
                    style="width:80px;padding:6px 10px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:.85rem;">
-            <button class="btn btn-outline btn-sm" onclick="sorgulaBBDurum()">🔍 Durumu Sorgula</button>
+            <button class="btn btn-outline btn-sm" onclick="sorgulaBBDurum()">🔍 Check Status</button>
           </div>
         </div>
       </div>
 
-      <!-- ONAYLANMIŞ BELGELERİM -->
+      <!-- MY APPROVED DOCUMENTS -->
       <div class="card mt">
         <div class="card-head" style="display:flex;align-items:center;justify-content:space-between;">
-          <span>✅ Onaylanmış Belgelerim</span>
-          <button class="btn btn-outline btn-sm" onclick="loadBelgelerim()">🔄 Yenile</button>
+          <span>✅ My Approved Documents</span>
+          <button class="btn btn-outline btn-sm" onclick="loadBelgelerim()">🔄 Refresh</button>
         </div>
         <div id="belgelerim-list" class="belgelerim-list">
-          <div class="belge-empty">⏳ Yükleniyor…</div>
+          <div class="belge-empty">⏳ Loading…</div>
         </div>
       </div>
 
-      <!-- STAJ RAPORU YÜKLEME -->
+      <!-- INTERNSHIP REPORT UPLOAD -->
       <div class="card mt">
-        <div class="card-head">📝 Staj Raporu Yükle</div>
+        <div class="card-head">📝 Upload Internship Report</div>
         <div class="pdf-actions" style="flex-direction:column;gap:10px;align-items:flex-start;padding:16px 18px;">
-          <p style="font-size:.85rem;color:var(--gray-600);">Stajınız tamamlandıktan sonra staj defteri / raporunuzu buradan yükleyin.</p>
+          <p style="font-size:.85rem;color:var(--gray-600);">After completing your internship, upload your internship logbook / report here.</p>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <label style="font-size:.82rem;font-weight:600;color:var(--gray-600);">Başvuru ID:</label>
-            <input type="number" id="rapor-sub-id" placeholder="Örn: 5" min="1"
+            <label style="font-size:.82rem;font-weight:600;color:var(--gray-600);">Application ID:</label>
+            <input type="number" id="rapor-sub-id" placeholder="e.g. 5" min="1"
                    style="width:90px;padding:7px 10px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:.85rem;">
             <input type="file" id="rapor-file" accept=".pdf" hidden>
             <button class="btn btn-outline btn-sm" onclick="document.getElementById('rapor-file').click()">
-              <span>📂</span> Rapor Seç
+              <span>📂</span> Select Report
             </button>
-            <span id="rapor-file-name" class="file-name">Dosya seçilmedi</span>
+            <span id="rapor-file-name" class="file-name">No file selected</span>
             <button id="btn-rapor-yukle" class="btn btn-primary btn-sm" onclick="raporYukle()" disabled>
-              <span>📤</span> Yükle
+              <span>📤</span> Upload
             </button>
           </div>
           <div id="rapor-result" style="display:none;margin-top:4px;"></div>
@@ -227,22 +227,22 @@
       </div>
     </main>
 
-    <!-- SAĞ: CHAT -->
+    <!-- RIGHT: CHAT -->
     <aside class="chat-panel">
       <div class="chat-panel-card">
         <div class="chat-panel-head">
           <span class="chat-panel-icon">🤖</span>
           <div>
-            <div class="chat-panel-title">Staj Asistanı</div>
-            <div class="chat-panel-sub">Yönerge hakkında soru sor</div>
+            <div class="chat-panel-title">Internship Assistant</div>
+            <div class="chat-panel-sub">Ask a question about the directive</div>
           </div>
-          <button class="chat-clear-btn" onclick="clearChat()" title="Sohbeti temizle">🗑️</button>
+          <button class="chat-clear-btn" onclick="clearChat()" title="Clear chat">🗑️</button>
         </div>
         <div id="chat-chips" class="chat-chips"></div>
         <div id="chat-messages" class="chat-messages chat-messages-lg"></div>
         <div class="chat-input-row">
-          <input id="chat-input" type="text" placeholder="Bir şey sor…" autocomplete="off">
-          <button id="chat-send" class="btn-icon" title="Gönder">➤</button>
+          <input id="chat-input" type="text" placeholder="Ask something…" autocomplete="off">
+          <button id="chat-send" class="btn-icon" title="Send">➤</button>
         </div>
       </div>
     </aside>
@@ -250,252 +250,252 @@
   </div>
 </div>
 
-<!-- ══════════════════ SEKRETER PANELİ ══════════════════ -->
+<!-- ══════════════════ SECRETARY PANEL ══════════════════ -->
 <div id="tab-sekreter" class="panel{% if role == 'sekreter' %} active{% endif %}"
      style="{% if role != 'sekreter' %}display:none{% endif %}">
   <div class="sek-layout">
 
-    <!-- ÜST BAR -->
+    <!-- TOP BAR -->
     <div class="sek-topbar">
       <div class="sek-topbar-left">
         <div class="sek-title-group">
           <span class="sek-title-icon">🗂️</span>
           <div>
-            <div class="sek-title">Sekreter Paneli</div>
-            <div class="sek-subtitle">Başvuru yönetim ekranı</div>
+            <div class="sek-title">Secretary Panel</div>
+            <div class="sek-subtitle">Application management screen</div>
           </div>
         </div>
       </div>
       <div class="sek-topbar-right">
-        <button class="btn btn-outline btn-sm" onclick="aiOzet()">🧠 AI Günlük Özet</button>
-        <button class="btn btn-outline btn-sm" onclick="exportCSV()">📥 CSV İndir</button>
-        <button class="btn btn-primary btn-sm" onclick="loadBasvurular()">🔄 Yenile</button>
+        <button class="btn btn-outline btn-sm" onclick="aiOzet()">🧠 AI Daily Summary</button>
+        <button class="btn btn-outline btn-sm" onclick="exportCSV()">📥 Download CSV</button>
+        <button class="btn btn-primary btn-sm" onclick="loadBasvurular()">🔄 Refresh</button>
       </div>
     </div>
 
-    <!-- METRİKLER -->
+    <!-- METRICS -->
     <div class="sek-metrics">
       <div class="sek-metric">
         <div class="sek-metric-icon" style="background:#e0e7ff;color:#4f46e5">📋</div>
         <div class="sek-metric-body">
           <div class="sek-metric-val" id="m-toplam">—</div>
-          <div class="sek-metric-lbl">Toplam Başvuru</div>
+          <div class="sek-metric-lbl">Total Applications</div>
         </div>
       </div>
       <div class="sek-metric">
         <div class="sek-metric-icon" style="background:#d1fae5;color:#059669">✅</div>
         <div class="sek-metric-body">
           <div class="sek-metric-val" id="m-kabul">—</div>
-          <div class="sek-metric-lbl">Kabul Edilen</div>
+          <div class="sek-metric-lbl">Accepted</div>
         </div>
       </div>
       <div class="sek-metric">
         <div class="sek-metric-icon" style="background:#fee2e2;color:#dc2626">❌</div>
         <div class="sek-metric-body">
           <div class="sek-metric-val" id="m-red">—</div>
-          <div class="sek-metric-lbl">Reddedilen</div>
+          <div class="sek-metric-lbl">Rejected</div>
         </div>
       </div>
       <div class="sek-metric">
         <div class="sek-metric-icon" style="background:#fef3c7;color:#d97706">⏳</div>
         <div class="sek-metric-body">
           <div class="sek-metric-val" id="m-bekle">—</div>
-          <div class="sek-metric-lbl">Beklemede</div>
+          <div class="sek-metric-lbl">Pending</div>
         </div>
       </div>
     </div>
 
-    <!-- FİLTRE BAR -->
+    <!-- FILTER BAR -->
     <div class="sek-filter-bar">
       <div class="sek-search-wrap">
         <span class="sek-search-icon">🔍</span>
         <input id="sek-search" type="text" class="sek-search"
-               placeholder="Ad, öğrenci no veya firma ara…"
+               placeholder="Search by name, student no, or company…"
                oninput="filterBasvurular()">
       </div>
       <div class="sek-filter-btns">
-        <button class="sek-filter-btn active" data-filter="hepsi" onclick="setFilter(this,'hepsi')">Hepsi</button>
-        <button class="sek-filter-btn" data-filter="beklemede" onclick="setFilter(this,'beklemede')">⏳ Bekleyen</button>
-        <button class="sek-filter-btn" data-filter="KABUL" onclick="setFilter(this,'KABUL')">✅ Kabul</button>
-        <button class="sek-filter-btn" data-filter="RED" onclick="setFilter(this,'RED')">❌ Red</button>
+        <button class="sek-filter-btn active" data-filter="hepsi" onclick="setFilter(this,'hepsi')">All</button>
+        <button class="sek-filter-btn" data-filter="beklemede" onclick="setFilter(this,'beklemede')">⏳ Pending</button>
+        <button class="sek-filter-btn" data-filter="KABUL" onclick="setFilter(this,'KABUL')">✅ Accepted</button>
+        <button class="sek-filter-btn" data-filter="RED" onclick="setFilter(this,'RED')">❌ Rejected</button>
       </div>
     </div>
 
-    <!-- STAJ DÖNEMİ AYARLARI -->
+    <!-- INTERNSHIP PERIOD SETTINGS -->
     <div class="sek-donem-card">
       <div class="sek-donem-head">
-        <span>📅 Staj Dönemi Ayarları</span>
-        <button class="btn btn-outline btn-sm" onclick="toggleDonemEdit()">✏️ Düzenle</button>
+        <span>📅 Internship Period Settings</span>
+        <button class="btn btn-outline btn-sm" onclick="toggleDonemEdit()">✏️ Edit</button>
       </div>
-      <div id="donem-display" class="sek-donem-display">Yükleniyor…</div>
+      <div id="donem-display" class="sek-donem-display">Loading…</div>
       <div id="donem-form" class="sek-donem-form" style="display:none">
-        <!-- YAZ DÖNEMİ -->
-        <div class="sd-group-title">☀️ Yaz Dönemi</div>
+        <!-- SUMMER TERM -->
+        <div class="sd-group-title">☀️ Summer Term</div>
         <div class="sek-donem-grid">
-          <div class="field"><label>Dönem Adı</label>
-            <input type="text" id="sd-yaz-adi" placeholder="2025-2026 Yaz Dönemi"></div>
-          <div class="field"><label>Staj Başlangıç</label>
+          <div class="field"><label>Term Name</label>
+            <input type="text" id="sd-yaz-adi" placeholder="2025-2026 Summer Term"></div>
+          <div class="field"><label>Internship Start</label>
             <input type="date" id="sd-yaz-bas"></div>
-          <div class="field"><label>Staj Bitiş</label>
+          <div class="field"><label>Internship End</label>
             <input type="date" id="sd-yaz-bit"></div>
-          <div class="field"><label>Başvuru Son Gün</label>
+          <div class="field"><label>Application Deadline</label>
             <input type="date" id="sd-yaz-son"></div>
-          <div class="field"><label>Min. Staj Günü</label>
+          <div class="field"><label>Min. Internship Days</label>
             <input type="number" id="sd-yaz-min" min="1" max="90"></div>
         </div>
-        <!-- ARA DÖNEMİ -->
-        <div class="sd-group-title">❄️ Ara Dönem</div>
+        <!-- MID-YEAR TERM -->
+        <div class="sd-group-title">❄️ Mid-Year Term</div>
         <div class="sek-donem-grid">
-          <div class="field"><label>Dönem Adı</label>
-            <input type="text" id="sd-ara-adi" placeholder="2025-2026 Ara Dönem"></div>
-          <div class="field"><label>Staj Başlangıç</label>
+          <div class="field"><label>Term Name</label>
+            <input type="text" id="sd-ara-adi" placeholder="2025-2026 Mid-Year Term"></div>
+          <div class="field"><label>Internship Start</label>
             <input type="date" id="sd-ara-bas"></div>
-          <div class="field"><label>Staj Bitiş</label>
+          <div class="field"><label>Internship End</label>
             <input type="date" id="sd-ara-bit"></div>
-          <div class="field"><label>Başvuru Son Gün</label>
+          <div class="field"><label>Application Deadline</label>
             <input type="date" id="sd-ara-son"></div>
-          <div class="field"><label>Min. Staj Günü</label>
+          <div class="field"><label>Min. Internship Days</label>
             <input type="number" id="sd-ara-min" min="1" max="90"></div>
         </div>
         <div class="sek-donem-actions">
-          <button class="btn btn-primary btn-sm" onclick="saveDonem()">💾 Kaydet</button>
-          <button class="btn btn-outline btn-sm" onclick="toggleDonemEdit()">İptal</button>
+          <button class="btn btn-primary btn-sm" onclick="saveDonem()">💾 Save</button>
+          <button class="btn btn-outline btn-sm" onclick="toggleDonemEdit()">Cancel</button>
         </div>
       </div>
     </div>
 
-    <!-- 🤖 AKILLI ASISTAN -->
+    <!-- 🤖 SMART ASSISTANT -->
     <div class="agent-panel">
       <div class="agent-panel-head">
         <div style="display:flex;align-items:center;gap:12px;">
           <span style="font-size:1.6rem;">🤖</span>
           <div>
-            <div class="agent-panel-title">Akıllı Asistan</div>
-            <div class="agent-panel-sub">Başvurularınızı otomatik analiz eder ve yönetir</div>
+            <div class="agent-panel-title">Smart Assistant</div>
+            <div class="agent-panel-sub">Automatically analyzes and manages your applications</div>
           </div>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="agentDirect('ONCELIK', {}, '▶ Otomatik Analiz: Öncelik sıralaması')">▶ Otomatik Analiz</button>
+        <button class="btn btn-primary btn-sm" onclick="agentDirect('ONCELIK', {}, '▶ Automatic Analysis: Priority ranking')">▶ Automatic Analysis</button>
       </div>
       <div class="agent-actions">
-        <button class="agent-action-btn" onclick="agentDirect('ISTATISTIK', {tip:'ozet'}, '📊 Durum Özeti')">
+        <button class="agent-action-btn" onclick="agentDirect('ISTATISTIK', {tip:'ozet'}, '📊 Status Summary')">
           <span class="agent-action-icon">📊</span>
           <div>
-            <div class="agent-action-title">Durum Özeti</div>
-            <div class="agent-action-sub">Güncel istatistikler</div>
+            <div class="agent-action-title">Status Summary</div>
+            <div class="agent-action-sub">Current statistics</div>
           </div>
         </button>
-        <button class="agent-action-btn" onclick="agentDirectMulti([{tool:'ISTATISTIK',input:{tip:'firma'}},{tool:'ISTATISTIK',input:{tip:'bolum'}}], '🏢 Firma & Bölüm Dağılımı')">
+        <button class="agent-action-btn" onclick="agentDirectMulti([{tool:'ISTATISTIK',input:{tip:'firma'}},{tool:'ISTATISTIK',input:{tip:'bolum'}}], '🏢 Company & Department Breakdown')">
           <span class="agent-action-icon">🏢</span>
           <div>
-            <div class="agent-action-title">Firma & Bölüm</div>
-            <div class="agent-action-sub">Başvuru dağılımını gör</div>
+            <div class="agent-action-title">Company & Department</div>
+            <div class="agent-action-sub">View application breakdown</div>
           </div>
         </button>
         <button class="agent-action-btn" onclick="agentSoru()">
           <span class="agent-action-icon">💬</span>
           <div>
-            <div class="agent-action-title">Soru Sor</div>
-            <div class="agent-action-sub">LLM ile doğal dilde komut</div>
+            <div class="agent-action-title">Ask a Question</div>
+            <div class="agent-action-sub">Natural-language command via LLM</div>
           </div>
         </button>
       </div>
       <div id="agent-soru-row" class="agent-soru-row" style="display:none">
         <input id="agent-input" type="text" class="agent-soru-input"
-               placeholder="Örn: 5 numaralı başvuruyu onayla — Bilgisayar bölümünden kaç başvuru var?"
+               placeholder="e.g. Approve application number 5 — how many applications from the Computer department?"
                onkeydown="if(event.key==='Enter')agentGonder()">
-        <button class="btn btn-primary btn-sm" onclick="agentGonder()">Sor ➤</button>
+        <button class="btn btn-primary btn-sm" onclick="agentGonder()">Ask ➤</button>
       </div>
       <div id="agent-result" class="agent-result" style="display:none"></div>
     </div>
 
-    <!-- AI ÖZET PANELİ -->
+    <!-- AI SUMMARY PANEL -->
     <div id="ai-ozet-card" class="ai-ozet-card" style="display:none">
       <div class="ai-ozet-head">
-        <span>🧠 AI Günlük Özet</span>
+        <span>🧠 AI Daily Summary</span>
         <button onclick="document.getElementById('ai-ozet-card').style.display='none'" class="ai-close">✕</button>
       </div>
       <div id="ai-ozet-body" class="ai-ozet-body"></div>
     </div>
 
-    <!-- SEKMELER -->
+    <!-- TABS -->
     <div class="sek-tabs">
-      <button class="sek-tab active" onclick="sekmeAc(this,'basvurular')">📋 Başvurular</button>
-      <button class="sek-tab" onclick="sekmeAc(this,'raporlar')">📝 Staj Raporları</button>
-      <button class="sek-tab" onclick="sekmeAc(this,'dokumanlar')">📚 Yönerge & Dökümanlar</button>
+      <button class="sek-tab active" onclick="sekmeAc(this,'basvurular')">📋 Applications</button>
+      <button class="sek-tab" onclick="sekmeAc(this,'raporlar')">📝 Internship Reports</button>
+      <button class="sek-tab" onclick="sekmeAc(this,'dokumanlar')">📚 Directive & Documents</button>
     </div>
 
-    <!-- BAŞVURU LİSTESİ -->
+    <!-- APPLICATION LIST -->
     <div id="tab-basvurular" class="sek-list">
-      <div class="empty-state">Yükleniyor…</div>
+      <div class="empty-state">Loading…</div>
     </div>
 
-    <!-- RAPOR LİSTESİ -->
+    <!-- REPORT LIST -->
     <div id="tab-raporlar" class="sek-list" style="display:none">
-      <div class="empty-state">⏳ Yükleniyor…</div>
+      <div class="empty-state">⏳ Loading…</div>
     </div>
 
-    <!-- YÖNERGE & DÖKÜMANLAR -->
+    <!-- DIRECTIVE & DOCUMENTS -->
     <div id="tab-dokumanlar" class="sek-list" style="display:none">
-      <!-- ANA YÖNERGE GÜNCELLEME KARTI -->
+      <!-- MAIN DIRECTIVE UPDATE CARD -->
       <div class="dok-card dok-yonerge-card">
         <div class="dok-card-head">
-          <span>📜 Ana Yönerge (yonerge.pdf)</span>
+          <span>📜 Main Directive (yonerge.pdf)</span>
           <span id="dok-yonerge-badge" class="dok-badge">—</span>
         </div>
         <div class="dok-card-body">
-          <!-- Mevcut yönerge bilgisi + indir/görüntüle -->
+          <!-- Current directive info + download/view -->
           <div class="yonerge-mevcut">
             <div class="yonerge-mevcut-info">
               <span class="yonerge-mevcut-icon">📄</span>
               <div>
-                <div class="yonerge-mevcut-baslik">Şu an aktif yönerge</div>
+                <div class="yonerge-mevcut-baslik">Currently active directive</div>
                 <div id="yonerge-mevcut-meta" class="yonerge-mevcut-meta">—</div>
               </div>
             </div>
             <div class="yonerge-mevcut-aksiyon">
               <a href="/api/docs/view/yonerge.pdf" target="_blank" class="btn btn-outline btn-sm">
-                👁️ Görüntüle
+                👁️ View
               </a>
               <a href="/api/docs/view/yonerge.pdf?indir=1" class="btn btn-outline btn-sm">
-                ⬇️ İndir
+                ⬇️ Download
               </a>
             </div>
           </div>
 
           <p class="dok-aciklama">
-            Yeni bir PDF ile yönergeyi <strong>güncelleyebilirsiniz</strong>.
-            Güncelleme sonrasında öğrenciler ve chat asistanı <strong>anında yeni yönergeden</strong> bilgi alır.
-            Eski yönerge otomatik yedeklenir.
+            You can <strong>update</strong> the directive with a new PDF.
+            After the update, students and the chat assistant will <strong>immediately</strong> use info from the new directive.
+            The old directive is automatically backed up.
           </p>
           <div class="dok-yukle-row">
             <input type="file" id="yonerge-file" accept=".pdf" hidden>
             <button class="btn btn-outline btn-sm" onclick="document.getElementById('yonerge-file').click()">
-              📂 Yeni Yönerge Seç
+              📂 Select New Directive
             </button>
-            <span id="yonerge-file-name" class="file-name">Dosya seçilmedi</span>
+            <span id="yonerge-file-name" class="file-name">No file selected</span>
             <button id="btn-yonerge-update" class="btn btn-primary btn-sm" onclick="yonergeGuncelle()" disabled>
-              ⬆️ Yönergeyi Güncelle
+              ⬆️ Update Directive
             </button>
           </div>
           <div id="yonerge-result" class="yonerge-result" style="display:none"></div>
         </div>
       </div>
 
-      <!-- EK DÖKÜMANLAR -->
+      <!-- ADDITIONAL DOCUMENTS -->
       <div class="dok-card">
         <div class="dok-card-head">
-          <span>📑 Ek Dökümanlar</span>
+          <span>📑 Additional Documents</span>
           <button class="btn btn-outline btn-sm" onclick="document.getElementById('dok-file').click()">
-            ➕ Yeni Doküman Ekle
+            ➕ Add New Document
           </button>
           <input type="file" id="dok-file" accept=".pdf" hidden onchange="dokYukle(this)">
         </div>
         <div class="dok-card-body">
           <p class="dok-aciklama">
-            Staj takvimi, ek bilgilendirme veya duyuru gibi PDF'leri ekleyebilirsiniz.
-            Bu dökümanlar da chat asistanının yanıtlarına dahil olur.
+            You can add PDFs such as the internship calendar, additional information, or announcements.
+            These documents are also included in the chat assistant's answers.
           </p>
-          <div id="dok-list" class="dok-list">Yükleniyor…</div>
+          <div id="dok-list" class="dok-list">Loading…</div>
         </div>
       </div>
     </div>

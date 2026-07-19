@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Giriş — Amasya MYO Staj Asistanı</title>
+<title>Sign In — Amasya MYO Internship Assistant</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="login-body">
@@ -13,7 +13,7 @@
     <div class="login-logo">
       <span class="login-icon">🎓</span>
       <div class="login-title">Amasya MYO</div>
-      <div class="login-sub">Staj Başvuru Asistanı</div>
+      <div class="login-sub">Internship Application Assistant</div>
     </div>
 
     {% if error %}
@@ -22,22 +22,22 @@
 
     <form method="POST" action="/login" class="login-form">
       <div class="login-field">
-        <label>Kullanıcı Adı</label>
-        <input type="text" name="username" placeholder="ogrenci veya sekreter"
+        <label>Username</label>
+        <input type="text" name="username" placeholder="ogrenci or sekreter"
                autocomplete="username" autofocus required>
       </div>
       <div class="login-field">
-        <label>Şifre</label>
+        <label>Password</label>
         <input type="password" name="password" placeholder="••••••••"
                autocomplete="current-password" required>
       </div>
-      <button type="submit" class="btn btn-primary login-btn">Giriş Yap →</button>
+      <button type="submit" class="btn btn-primary login-btn">Sign In →</button>
     </form>
 
     <div class="login-hint">
-      <span>👨‍🎓 Öğrenci: <code>ogrenci / ogrenci123</code></span>
-      <span>🗂️ Sekreter: <code>sekreter / sekreter123</code></span>
-      <span>🎓 Bölüm Başkanı: <code>bolum_baskani / bb2025</code></span>
+      <span>👨‍🎓 Student: <code>ogrenci / ogrenci123</code></span>
+      <span>🗂️ Secretary: <code>sekreter / sekreter123</code></span>
+      <span>🎓 Department Head: <code>bolum_baskani / bb2025</code></span>
     </div>
   </div>
 </div>

@@ -16,7 +16,7 @@ from flask import (Flask, jsonify, redirect, render_template,
                    request, send_file, session, url_for)
 
 app              = Flask(__name__)
-app.secret_key   = "amasya-myo-staj-2025-gizli"
+app.secret_key   = os.environ.get("FLASK_SECRET_KEY", "amasya-myo-staj-2025-gizli")
 BASE    = Path(__file__).parent
 DB_PATH = BASE / "staj.db"
 UPLOAD  = BASE / "uploads" / "pdfs"
@@ -62,7 +62,7 @@ def sekreter_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if session.get("role") != "sekreter":
-            return jsonify({"ok": False, "hata": "Yetkisiz erişim"}), 403
+            return jsonify({"ok": False, "hata": "Unauthorized access"}), 403
         return f(*args, **kwargs)
     return decorated
 
@@ -448,7 +448,7 @@ def login():
             if user["role"] == "bolum_baskani":
                 return redirect(url_for("bolum_baskani_page"))
             return redirect(url_for("index"))
-        error = "Kullanıcı adı veya şifre hatalı."
+        error = "Incorrect username or password."
     return render_template("login.html", error=error)
 
 
@@ -478,7 +478,7 @@ def api_validate():
     v    = validate_form(data)
     msgs = []
     for m in v["missing"]:
-        msgs.append({"t": "err",  "m": f"Zorunlu alan eksik: {m}"})
+        msgs.append({"t": "err",  "m": f"Required field missing: {m}"})
     for e in v["errors"]:
         msgs.append({"t": "err",  "m": e})
     for w in v["warnings"]:
@@ -488,9 +488,9 @@ def api_validate():
                                   "baslangic_tarihi","bitis_tarihi","staj_gun_sayisi"]
                      if data.get(k) and str(data[k]).strip())
         if filled >= 7:
-            msgs.append({"t": "ok",   "m": "Tüm zorunlu alanlar dolu ✓"})
+            msgs.append({"t": "ok",   "m": "All required fields are filled ✓"})
         else:
-            msgs.append({"t": "info", "m": "Formu doldurmaya devam edin…"})
+            msgs.append({"t": "info", "m": "Continue filling out the form…"})
     return jsonify({"msgs": msgs})
 
 @app.route("/api/pdf", methods=["POST"])
@@ -513,7 +513,7 @@ def api_yukle():
     from services.form_service import extract_fields_from_pdf_text
     file = request.files.get("pdf")
     if not file:
-        return jsonify({"ok": False, "hata": "Dosya yok"}), 400
+        return jsonify({"ok": False, "hata": "No file"}), 400
 
     form_json = request.form.get("form_data", "")
     user_form = json.loads(form_json) if form_json else {}
@@ -647,7 +647,7 @@ def api_model_info():
 def api_basvuru_pdf(sub_id):
     pdf_yol = UPLOAD / f"{sub_id}.pdf"
     if not pdf_yol.exists():
-        return "PDF bulunamadı", 404
+        return "PDF not found", 404
     return send_file(str(pdf_yol), mimetype="application/pdf")
 
 @app.route("/api/basvurular")
@@ -677,7 +677,7 @@ def _sekreter_ai_kontrol(sub_id: int) -> dict:
         (sub_id,)
     ).fetchone()
     if not row:
-        return {"ok": False, "hata": "Başvuru bulunamadı"}
+        return {"ok": False, "hata": "Application not found"}
 
     kontroller = {}
     tum_ok = True
@@ -705,14 +705,14 @@ def _sekreter_ai_kontrol(sub_id: int) -> dict:
         sorunlar = (v.get("missing") or []) + (v.get("errors") or [])
         kontroller["form"] = {
             "ok":      form_ok,
-            "mesaj":   "Tüm zorunlu alanlar dolu." if form_ok
+            "mesaj":   "All required fields are filled." if form_ok
                        else "Eksik/hatalı: " + ", ".join(sorunlar[:4]),
             "uyarilar": v.get("warnings", [])[:3],
         }
         if not form_ok:
             tum_ok = False
     except Exception as e:
-        kontroller["form"] = {"ok": False, "mesaj": f"Form kontrolü hatası: {e}", "uyarilar": []}
+        kontroller["form"] = {"ok": False, "mesaj": f"Form check error: {e}", "uyarilar": []}
         tum_ok = False
 
     # 3. AI analiz (Ollama modeli)
@@ -727,7 +727,7 @@ def _sekreter_ai_kontrol(sub_id: int) -> dict:
         if not ai_ok:
             tum_ok = False
     except Exception as e:
-        kontroller["ai"] = {"ok": False, "mesaj": f"AI analiz hatası: {e}", "guven": 0}
+        kontroller["ai"] = {"ok": False, "mesaj": f"AI analysis error: {e}", "guven": 0}
         tum_ok = False
 
     if tum_ok:
@@ -969,13 +969,13 @@ def api_docs_view(name):
     """PDF görüntüleme/indirme. yonerge.pdf veya docs/ altındaki dosya."""
     # Güvenlik: dosya adında / veya .. olmasın
     if "/" in name or ".." in name or "\\" in name:
-        return "Geçersiz dosya adı", 400
+        return "Invalid file name", 400
     if name == "yonerge.pdf":
         path = YONERGE
     else:
         path = DOCS / name
     if not path.exists():
-        return "Dosya bulunamadı", 404
+        return "File not found", 404
     return send_file(str(path), mimetype="application/pdf",
                      as_attachment=request.args.get("indir") == "1",
                      download_name=name)
@@ -1009,9 +1009,9 @@ def api_docs_list():
 def api_docs_upload():
     file = request.files.get("pdf")
     if not file or not file.filename:
-        return jsonify({"ok": False, "hata": "Dosya seçilmedi"}), 400
+        return jsonify({"ok": False, "hata": "No file selected"}), 400
     if not file.filename.lower().endswith(".pdf"):
-        return jsonify({"ok": False, "hata": "Yalnızca PDF kabul edilir"}), 400
+        return jsonify({"ok": False, "hata": "Only PDF files are accepted"}), 400
 
     save_path = DOCS / file.filename
     file.save(str(save_path))
@@ -1020,7 +1020,7 @@ def api_docs_upload():
     text = extract_pdf_text(str(save_path))
     if not text.strip():
         save_path.unlink(missing_ok=True)
-        return jsonify({"ok": False, "hata": "PDF'den metin okunamadı"}), 400
+        return jsonify({"ok": False, "hata": "Could not read text from PDF"}), 400
 
     _, rag = load_services()
     # Aynı isimde varsa önce kaldır
@@ -1036,9 +1036,9 @@ def api_docs_yonerge_update():
     yeni içerik aynı isimle eklenir."""
     file = request.files.get("pdf")
     if not file or not file.filename:
-        return jsonify({"ok": False, "hata": "Dosya seçilmedi"}), 400
+        return jsonify({"ok": False, "hata": "No file selected"}), 400
     if not file.filename.lower().endswith(".pdf"):
-        return jsonify({"ok": False, "hata": "Yalnızca PDF kabul edilir"}), 400
+        return jsonify({"ok": False, "hata": "Only PDF files are accepted"}), 400
 
     from services.pdf_service import extract_pdf_text
 
@@ -1051,7 +1051,7 @@ def api_docs_yonerge_update():
     if not text.strip():
         try: os.unlink(tmp_path)
         except: pass
-        return jsonify({"ok": False, "hata": "PDF'den metin okunamadı, geçerli bir yönerge yükleyin"}), 400
+        return jsonify({"ok": False, "hata": "Could not read text from PDF, please upload a valid directive"}), 400
 
     # Eski yönergeyi yedekle (yonerge_eski_YYYYMMDD_HHMMSS.pdf)
     if YONERGE.exists():
@@ -1076,7 +1076,7 @@ def api_docs_yonerge_update():
     chunk_say = sum(1 for _ in rag.search("staj", top_k=100))  # yaklaşık
     return jsonify({
         "ok": True,
-        "mesaj": "Yönerge güncellendi. Öğrenciler artık yeni yönergeden yanıt alacak.",
+        "mesaj": "Directive updated. Students will now receive answers based on the new directive.",
         "boyut_kb": len(text.encode('utf-8')) // 1024,
         "karakter": len(text),
     })
@@ -1088,9 +1088,9 @@ def api_docs_delete():
     data = request.get_json(force=True) or {}
     name = data.get("name", "")
     if not name:
-        return jsonify({"ok": False, "hata": "Dosya adı eksik"}), 400
+        return jsonify({"ok": False, "hata": "Missing file name"}), 400
     if name == "yonerge.pdf":
-        return jsonify({"ok": False, "hata": "Ana yönerge silinemez. Güncellemek için 'Yönergeyi Güncelle' kullanın."}), 400
+        return jsonify({"ok": False, "hata": "The main directive cannot be deleted. Use 'Update Directive' to update it."}), 400
 
     pdf_path = DOCS / name
     pdf_path.unlink(missing_ok=True)
@@ -1137,9 +1137,9 @@ def api_rapor_yukle():
     file = request.files.get("rapor")
     sub_id = request.form.get("submission_id")
     if not file or not sub_id:
-        return jsonify({"ok": False, "hata": "Dosya veya başvuru ID eksik"}), 400
+        return jsonify({"ok": False, "hata": "Missing file or application ID"}), 400
     if not file.filename.lower().endswith(".pdf"):
-        return jsonify({"ok": False, "hata": "Sadece PDF kabul edilir"}), 400
+        return jsonify({"ok": False, "hata": "Only PDF files are accepted"}), 400
 
     fname    = f"rapor_{sub_id}_{file.filename}"
     savepath = RAPORLAR / fname
@@ -1234,15 +1234,15 @@ def api_rapor_analiz(rid):
 
     row = get_db().execute("SELECT * FROM staj_raporlari WHERE id=?", (rid,)).fetchone()
     if not row:
-        return jsonify({"ok": False, "hata": "Rapor bulunamadı"}), 404
+        return jsonify({"ok": False, "hata": "Report not found"}), 404
 
     pdf_path = RAPORLAR / row["dosya_yolu"]
     if not pdf_path.exists():
-        return jsonify({"ok": False, "hata": "PDF bulunamadı"}), 404
+        return jsonify({"ok": False, "hata": "PDF not found"}), 404
 
     text = extract_pdf_text(str(pdf_path))
     if not text.strip():
-        return jsonify({"ok": False, "hata": "PDF'den metin okunamadı"}), 400
+        return jsonify({"ok": False, "hata": "Could not read text from PDF"}), 400
 
     sub = get_db().execute("SELECT * FROM submissions WHERE id=?", (row["submission_id"],)).fetchone()
     sub_info = ""
@@ -1479,9 +1479,9 @@ def _agent_tool_list(filter_="hepsi"):
 def _agent_tool_get(id_):
     # PDF yoksa erişilemez
     if id_ not in _gecerli_submission_ids():
-        return {"hata": f"#{id_} bulunamadı veya PDF dosyası yok"}
+        return {"hata": f"#{id_} not found or has no PDF file"}
     r = get_db().execute("SELECT * FROM submissions WHERE id=?", (id_,)).fetchone()
-    if not r: return {"hata": f"#{id_} bulunamadı"}
+    if not r: return {"hata": f"#{id_} not found"}
     d = dict(r)
     try: d["form"] = json.loads(d.get("extracted_json") or "{}")
     except: d["form"] = {}
@@ -1490,13 +1490,13 @@ def _agent_tool_get(id_):
 
 def _agent_tool_karar(id_, karar, sebep=""):
     if id_ not in _gecerli_submission_ids():
-        return {"hata": f"#{id_} bulunamadı veya PDF yok"}
+        return {"hata": f"#{id_} not found or has no PDF"}
     durum = "onaylandi" if karar == "KABUL" else "reddedildi"
     with get_db() as c:
         cur = c.execute("UPDATE submissions SET durum=?, ai_karar=? WHERE id=?",
                         (durum, karar, id_))
         if cur.rowcount == 0:
-            return {"hata": f"#{id_} bulunamadı"}
+            return {"hata": f"#{id_} not found"}
     return {"ok": True, "id": id_, "yeni_durum": durum, "sebep": sebep}
 
 def _agent_tool_ara(anahtar):
@@ -1605,7 +1605,7 @@ def _agent_tool_calistir(tool_name: str, inp: dict):
         elif tn == "ISTATISTIK":   return tn, _agent_tool_istatistik(inp.get("tip","ozet"))
         elif tn in ("ONCELIK","ONCELIK_SIRALA"): return tn, _agent_tool_oncelik()
         elif tn == "CEVAP":        return tn, {"mesaj": inp.get("metin","")}
-        else:                      return tn, {"hata": f"Bilinmeyen tool: {tn}"}
+        else:                      return tn, {"hata": f"Unknown tool: {tn}"}
     except Exception as e:
         return tn, {"hata": str(e)}
 
@@ -1842,11 +1842,11 @@ def api_bb_onayla():
     sub_id = int(data.get("id", 0))
     bb_ad  = (data.get("ad") or session.get("username","Bölüm Başkanı")).strip()
     if not sub_id:
-        return jsonify({"ok": False, "hata": "ID gerekli"}), 400
+        return jsonify({"ok": False, "hata": "ID is required"}), 400
 
     row = get_db().execute("SELECT * FROM submissions WHERE id=?", (sub_id,)).fetchone()
     if not row:
-        return jsonify({"ok": False, "hata": "Başvuru bulunamadı"}), 404
+        return jsonify({"ok": False, "hata": "Application not found"}), 404
 
     form_data = {}
     try: form_data = json.loads(row["extracted_json"] or "{}")
@@ -1863,7 +1863,7 @@ def api_bb_onayla():
     try:
         fill_staj_pdf(form_data, signed_path)
     except Exception as e:
-        return jsonify({"ok": False, "hata": f"PDF üretilemedi: {e}"}), 500
+        return jsonify({"ok": False, "hata": f"Could not generate PDF: {e}"}), 500
 
     with get_db() as c:
         c.execute(
@@ -1880,7 +1880,7 @@ def api_bb_reddet():
     sub_id = int(data.get("id", 0))
     sebep  = data.get("sebep", "")
     if not sub_id:
-        return jsonify({"ok": False, "hata": "ID gerekli"}), 400
+        return jsonify({"ok": False, "hata": "ID is required"}), 400
     with get_db() as c:
         c.execute("UPDATE submissions SET bb_durum=?, durum=? WHERE id=?",
                   ("reddedildi", "bb_reddedildi", sub_id))
@@ -1892,10 +1892,10 @@ def api_bb_reddet():
 def api_bb_imzali_pdf(sub_id):
     row = get_db().execute("SELECT bb_pdf_yolu, bb_durum FROM submissions WHERE id=?", (sub_id,)).fetchone()
     if not row or row["bb_durum"] != "onaylandi" or not row["bb_pdf_yolu"]:
-        return jsonify({"ok": False, "hata": "İmzalı PDF bulunamadı"}), 404
+        return jsonify({"ok": False, "hata": "Signed PDF not found"}), 404
     path = Path(row["bb_pdf_yolu"])
     if not path.exists():
-        return jsonify({"ok": False, "hata": "Dosya mevcut değil"}), 404
+        return jsonify({"ok": False, "hata": "File does not exist"}), 404
     return send_file(str(path), mimetype="application/pdf",
                      as_attachment=True,
                      download_name=f"staj_imzali_{sub_id}.pdf")
@@ -1936,19 +1936,19 @@ def api_sekreter_ilet(sub_id):
         "SELECT durum, bb_durum, extracted_json FROM submissions WHERE id=?", (sub_id,)
     ).fetchone()
     if not row:
-        return jsonify({"ok": False, "hata": "Başvuru bulunamadı"}), 404
+        return jsonify({"ok": False, "hata": "Application not found"}), 404
 
     if row["bb_durum"] != "onaylandi":
         return jsonify({
             "ok": False,
-            "hata": "Bölüm Başkanı onayı olmadan sekretere gönderilemez.",
+            "hata": "Cannot be sent to the secretary without Department Head approval.",
             "bb_durum": row["bb_durum"],
         }), 403
 
     if row["durum"] not in ("bb_onaylandi",):
         return jsonify({
             "ok": False,
-            "hata": f"Bu başvuru zaten işlemde ({row['durum']}).",
+            "hata": f"This application is already being processed ({row['durum']}).",
         }), 400
 
     with get_db() as c:
@@ -1981,7 +1981,7 @@ def api_basvuru_durum(sub_id):
         (sub_id,),
     ).fetchone()
     if not row:
-        return jsonify({"ok": False, "hata": "Bulunamadı"}), 404
+        return jsonify({"ok": False, "hata": "Not found"}), 404
     return jsonify({
         "ok":       True,
         "durum":    row["durum"],

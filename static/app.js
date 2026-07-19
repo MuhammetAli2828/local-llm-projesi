@@ -49,10 +49,10 @@ async function loadDonem() {
     const banner = document.getElementById('donem-banner');
     if (banner) {
       const yaz = _donem.yaz_staj_baslangic
-        ? `☀️ <strong>${_donem.yaz_donem_adi}</strong>: ${_donem.yaz_staj_baslangic} – ${_donem.yaz_staj_bitis} &nbsp;(Son: ${_donem.yaz_basvuru_son_gun || '—'}, Min: ${_donem.yaz_min_staj_gun} gün)`
+        ? `☀️ <strong>${_donem.yaz_donem_adi}</strong>: ${_donem.yaz_staj_baslangic} – ${_donem.yaz_staj_bitis} &nbsp;(Deadline: ${_donem.yaz_basvuru_son_gun || '—'}, Min: ${_donem.yaz_min_staj_gun} days)`
         : '';
       const ara = _donem.ara_staj_baslangic
-        ? `&nbsp;&nbsp;|&nbsp;&nbsp; ❄️ <strong>${_donem.ara_donem_adi}</strong>: ${_donem.ara_staj_baslangic} – ${_donem.ara_staj_bitis} &nbsp;(Son: ${_donem.ara_basvuru_son_gun || '—'}, Min: ${_donem.ara_min_staj_gun} gün)`
+        ? `&nbsp;&nbsp;|&nbsp;&nbsp; ❄️ <strong>${_donem.ara_donem_adi}</strong>: ${_donem.ara_staj_baslangic} – ${_donem.ara_staj_bitis} &nbsp;(Deadline: ${_donem.ara_basvuru_son_gun || '—'}, Min: ${_donem.ara_min_staj_gun} days)`
         : '';
       if (yaz || ara) { banner.style.display = 'block'; banner.innerHTML = `📅 ${yaz}${ara}`; }
     }
@@ -64,14 +64,14 @@ async function loadDonem() {
         `<div class="sd-period-row">` +
           `<span class="sd-tag sd-yaz">☀️ ${_donem.yaz_donem_adi || '—'}</span>` +
           `<span class="sd-info">${_donem.yaz_staj_baslangic} – ${_donem.yaz_staj_bitis}</span>` +
-          `<span class="sd-info">Son: ${_donem.yaz_basvuru_son_gun || '—'}</span>` +
-          `<span class="sd-info">Min: ${_donem.yaz_min_staj_gun} gün</span>` +
+          `<span class="sd-info">Deadline: ${_donem.yaz_basvuru_son_gun || '—'}</span>` +
+          `<span class="sd-info">Min: ${_donem.yaz_min_staj_gun} days</span>` +
         `</div>` +
         `<div class="sd-period-row" style="margin-top:6px">` +
           `<span class="sd-tag sd-ara">❄️ ${_donem.ara_donem_adi || '—'}</span>` +
           `<span class="sd-info">${_donem.ara_staj_baslangic} – ${_donem.ara_staj_bitis}</span>` +
-          `<span class="sd-info">Son: ${_donem.ara_basvuru_son_gun || '—'}</span>` +
-          `<span class="sd-info">Min: ${_donem.ara_min_staj_gun} gün</span>` +
+          `<span class="sd-info">Deadline: ${_donem.ara_basvuru_son_gun || '—'}</span>` +
+          `<span class="sd-info">Min: ${_donem.ara_min_staj_gun} days</span>` +
         `</div>`;
     }
 
@@ -116,8 +116,8 @@ async function saveDonem() {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    if (data.ok) { showToast('✅ Dönem bilgileri kaydedildi!'); toggleDonemEdit(); loadDonem(); }
-  } catch (e) { showToast('❌ Kayıt hatası: ' + e.message); }
+    if (data.ok) { showToast('✅ Period information saved!'); toggleDonemEdit(); loadDonem(); }
+  } catch (e) { showToast('❌ Save error: ' + e.message); }
 }
 
 /* ── TARİH HESAP KUTUSU ───────────────────────────────────────────────────── */
@@ -133,9 +133,9 @@ function hesaplaTarih() {
   const gun    = document.getElementById('staj_gun_sayisi');
   if (gun && !gun.value) gun.value = isgunu;
   const uyari = gun && gun.value && parseInt(gun.value) > isgunu + 5
-    ? `<span style="color:#dc2626"> ⚠️ Girilen gün (${gun.value}) aralıktan fazla!</span>` : '';
+    ? `<span style="color:#dc2626"> ⚠️ The entered days (${gun.value}) exceed the range!</span>` : '';
   box.style.display = 'block';
-  box.innerHTML = `📅 <strong>${bas}</strong> → <strong>${bit}</strong> &nbsp;=&nbsp; <strong>${diff}</strong> takvim günü &nbsp;|&nbsp; yaklaşık <strong>${isgunu}</strong> iş günü${uyari}`;
+  box.innerHTML = `📅 <strong>${bas}</strong> → <strong>${bit}</strong> &nbsp;=&nbsp; <strong>${diff}</strong> calendar days &nbsp;|&nbsp; approximately <strong>${isgunu}</strong> business days${uyari}`;
 }
 
 ['baslangic_tarihi','bitis_tarihi','staj_gun_sayisi'].forEach(id => {
@@ -167,7 +167,7 @@ async function runValidate() {
       return `<div class="fb-item ${m.t}">${icons[m.t]||'•'} ${m.m}</div>`;
     }).join('');
   } catch {
-    box.innerHTML = '<div class="fb-item info">ℹ️ Sunucuya ulaşılamıyor.</div>';
+    box.innerHTML = '<div class="fb-item info">ℹ️ Cannot reach the server.</div>';
   }
 }
 
@@ -198,34 +198,34 @@ async function loadKurallar() {
           </div>`;
       }).join('');
     } else {
-      list.innerHTML = '<div class="fb-item info">ℹ️ Yönerge bulunamadı.</div>';
+      list.innerHTML = '<div class="fb-item info">ℹ️ Directive not found.</div>';
     }
   } catch {
-    list.innerHTML = '<div class="fb-item warn">⚠️ Kurallar yüklenemedi.</div>';
+    list.innerHTML = '<div class="fb-item warn">⚠️ Could not load rules.</div>';
   }
 }
 
 /* ── PDF OLUŞTUR ──────────────────────────────────────────────────────────── */
 async function generatePDF() {
   const btn = document.getElementById('btn-pdf');
-  btn.innerHTML = '<span class="spin">⏳</span> Oluşturuluyor…';
+  btn.innerHTML = '<span class="spin">⏳</span> Generating…';
   btn.disabled = true;
   try {
     const res = await fetch('/api/pdf', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(getFormData()),
     });
-    if (!res.ok) { showToast('❌ PDF oluşturulamadı.'); return; }
+    if (!res.ok) { showToast('❌ Could not generate PDF.'); return; }
     const blob = await res.blob();
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href = url; a.download = 'staj_basvuru.pdf'; a.click();
     URL.revokeObjectURL(url);
-    showToast('✅ PDF indirildi!');
+    showToast('✅ PDF downloaded!');
   } catch (e) {
-    showToast('❌ Hata: ' + e.message);
+    showToast('❌ Error: ' + e.message);
   } finally {
-    btn.innerHTML = '<span>📥</span> PDF Oluştur & İndir';
+    btn.innerHTML = '<span>📥</span> Create & Download PDF';
     btn.disabled = false;
   }
 }
@@ -243,7 +243,7 @@ if (fileInput) fileInput.addEventListener('change', () => {
 async function gonderPDF() {
   const file = fileInput.files[0];
   if (!file) return;
-  btnGonder.innerHTML = '<span class="spin">⏳</span> Analiz ediliyor…';
+  btnGonder.innerHTML = '<span class="spin">⏳</span> Analyzing…';
   btnGonder.disabled = true;
   const fd = new FormData();
   fd.append('pdf', file);
@@ -254,7 +254,7 @@ async function gonderPDF() {
     const res  = await fetch('/api/yukle', { method: 'POST', body: fd });
     const data = await res.json();
 
-    // PDF'den çıkarılan alanları boş form alanlarına doldur
+    // fill empty form fields with values extracted from the PDF
     if (data.form_data) {
       FIELDS.forEach(id => {
         const el = document.getElementById(id);
@@ -270,22 +270,22 @@ async function gonderPDF() {
     );
     const t = data.tarihler || {};
     const tarihHtml = (t.baslangic || t.bitis)
-      ? `<div class="gonderme-tarih">📅 ${t.baslangic||'?'} → ${t.bitis||'?'}${t.staj_gun ? ` · ${t.staj_gun} gün` : ''}</div>`
+      ? `<div class="gonderme-tarih">📅 ${t.baslangic||'?'} → ${t.bitis||'?'}${t.staj_gun ? ` · ${t.staj_gun} days` : ''}</div>`
       : '';
     const isKabul = data.karar === 'KABUL';
     const eksikHtml = eksikler.length
-      ? `<div class="gonderme-eksik">⚠️ Eksik alanlar: ${eksikler.join(', ')}</div>` : '';
+      ? `<div class="gonderme-eksik">⚠️ Missing fields: ${eksikler.join(', ')}</div>` : '';
     resultBox.className = 'yukle-result ' + (isKabul ? 'kabul' : 'red');
     resultBox.innerHTML =
-      `<div class="gonderme-baslik">${isKabul ? '✅ AI Değerlendirmesi: Uygun' : '❌ Başvurunuz Reddedildi'} — #${data.id}</div>` +
+      `<div class="gonderme-baslik">${isKabul ? '✅ AI Assessment: Suitable' : '❌ Your Application Was Rejected'} — #${data.id}</div>` +
       `<div class="gonderme-aciklama">${data.mesaj || ''}</div>` +
       `${tarihHtml}${eksikHtml}` +
       `<div class="gonderme-bilgi">${isKabul
-        ? '⏳ Başvurunuz <strong>Bölüm Başkanı onayına</strong> iletildi. BB onayladıktan sonra "Sekretere İlet" butonu aktif olacak.'
-        : 'ℹ️ Lütfen eksikleri tamamlayıp yeniden başvurun.'}</div>`;
-    showToast(isKabul ? '📨 Bölüm başkanı onayına gönderildi!' : '❌ Başvurunuz reddedildi.');
+        ? '⏳ Your application has been sent for <strong>Department Head approval</strong>. Once approved, the "Send to Secretary" button will become active.'
+        : 'ℹ️ Please complete the missing fields and reapply.'}</div>`;
+    showToast(isKabul ? '📨 Sent for Department Head approval!' : '❌ Your application was rejected.');
 
-    // BB durum takip panelini göster
+    // show the Department Head status tracking panel
     if (isKabul && data.id) {
       const wrap = document.getElementById('bb-durum-wrap');
       const idEl = document.getElementById('bb-sorgu-id');
@@ -293,16 +293,16 @@ async function gonderPDF() {
       if (idEl) idEl.value = data.id;
       _bbSorguId = data.id;
       renderBBDurum({ bb_durum: 'bekliyor', ai_mesaj: data.mesaj || '' });
-      // 10 saniyede bir otomatik sorgula
+      // auto-check every 10 seconds
       if (_bbPollTimer) clearInterval(_bbPollTimer);
       _bbPollTimer = setInterval(() => sorgulaBBDurum(true), 10000);
     }
   } catch (e) {
     resultBox.style.display = 'block';
     resultBox.className = 'yukle-result red';
-    resultBox.innerHTML = '❌ Sunucu hatası: ' + e.message;
+    resultBox.innerHTML = '❌ Server error: ' + e.message;
   } finally {
-    btnGonder.innerHTML = '<span>🚀</span> Sekretere Gönder';
+    btnGonder.innerHTML = '<span>🚀</span> Send to Secretary';
     btnGonder.disabled = false;
   }
 }
@@ -439,7 +439,7 @@ async function sendChat() {
       typing.innerHTML = mdToHtml(tamYanit);
       typing.classList.remove('typing');
     } catch {
-      typing.textContent = '❌ Bağlantı hatası.';
+      typing.textContent = '❌ Connection error.';
       tamYanit = '';
     }
   }
@@ -469,16 +469,16 @@ async function sendChat() {
   // Form alanı verisi geldiyse otomatik doldur (chat başarısız olduysa atlanır)
   if (!isHata && data.form_data && Object.keys(data.form_data).length > 0) {
     const ALAN_ADLARI = {
-      baslangic_tarihi: 'Başlangıç',
-      bitis_tarihi:     'Bitiş',
-      staj_gun_sayisi:  'Staj Günü',
-      firma_adi:        'Firma Adı',
-      firma_adresi:     'Firma Adresi',
-      hizmet_alani:     'Hizmet Alanı',
-      bolum:            'Bölüm',
-      ad_soyad:         'Ad Soyad',
-      ogrenci_no:       'Öğrenci No',
-      tc_kimlik_no:     'TC Kimlik',
+      baslangic_tarihi: 'Start',
+      bitis_tarihi:     'End',
+      staj_gun_sayisi:  'Internship Days',
+      firma_adi:        'Company Name',
+      firma_adresi:     'Company Address',
+      hizmet_alani:     'Service Area',
+      bolum:            'Department',
+      ad_soyad:         'Full Name',
+      ogrenci_no:       'Student No',
+      tc_kimlik_no:     'National ID',
     };
     const satirlar = [];
     Object.entries(data.form_data).forEach(([key, val]) => {
@@ -498,7 +498,7 @@ async function sendChat() {
       runValidate();
       const bilgi = document.createElement('div');
       bilgi.className = 'chat-msg bot autofill-msg';
-      bilgi.innerHTML = `<div class="autofill-head">🤖 Form otomatik dolduruldu</div>${satirlar.join('')}`;
+      bilgi.innerHTML = `<div class="autofill-head">🤖 Form auto-filled</div>${satirlar.join('')}`;
       chatMessages.appendChild(bilgi);
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
@@ -526,7 +526,7 @@ let _activeFilter = 'hepsi';
 async function loadBasvurular() {
   const list = document.getElementById('tab-basvurular');
   if (!list) return;
-  list.innerHTML = '<div class="empty-state">⏳ Yükleniyor…</div>';
+  list.innerHTML = '<div class="empty-state">⏳ Loading…</div>';
   try {
     const res  = await fetch('/api/basvurular');
     _allRows   = await res.json();
@@ -540,25 +540,25 @@ async function loadBasvurular() {
     document.getElementById('m-bekle').textContent  = b;
     renderList(_allRows);
   } catch (e) {
-    list.innerHTML = `<div class="empty-state">❌ Hata: ${e.message}</div>`;
+    list.innerHTML = `<div class="empty-state">❌ Error: ${e.message}</div>`;
   }
 }
 
 function renderList(rows) {
   const list = document.getElementById('tab-basvurular');
-  if (!rows.length) { list.innerHTML = '<div class="empty-state">📭 Başvuru yok.</div>'; return; }
+  if (!rows.length) { list.innerHTML = '<div class="empty-state">📭 No applications.</div>'; return; }
   list.innerHTML = rows.map(r => {
-    // Gerçek karar: durum (sekreter kararı) — AI önerisi: ai_karar
+    // Actual decision: durum (secretary's decision) — AI suggestion: ai_karar
     const durum    = r.durum || 'beklemede';
     const aiOneri  = r.ai_karar || '—';
     const bekleyen = durum === 'beklemede';
     const isRed    = ['reddedildi','bb_reddedildi'].includes(durum);
     const cardCls  = durum === 'onaylandi' ? 'kabul-card' : isRed ? 'red-card' : 'bekle-card';
     const durumIcon = durum === 'onaylandi' ? '✅' : isRed ? '❌' : '⏳';
-    const durumLabel = durum === 'onaylandi' ? 'Onaylandı'
-                     : durum === 'bb_reddedildi' ? 'BB Reddetti'
-                     : isRed ? 'Reddedildi'
-                     : durum === 'sekreter_bekliyor' ? 'Sekreter Bekliyor' : 'Beklemede';
+    const durumLabel = durum === 'onaylandi' ? 'Approved'
+                     : durum === 'bb_reddedildi' ? 'Rejected by Dept. Head'
+                     : isRed ? 'Rejected'
+                     : durum === 'sekreter_bekliyor' ? 'Awaiting Secretary' : 'Pending';
     const durumBadgeCls = durum === 'onaylandi' ? 'kabul' : isRed ? 'red' : 'bekle';
 
     let ext = {}; try { ext = JSON.parse(r.extracted_json || '{}'); } catch {}
@@ -566,63 +566,63 @@ function renderList(rows) {
     let aiD = {}; try { aiD = JSON.parse(r.ai_detay_json || '{}'); } catch {}
 
     const infoHtml = [
-      ['Ad Soyad','ad_soyad'],['Öğrenci No','ogrenci_no'],['Bölüm','bolum'],
-      ['Firma','firma_adi'],['Başlangıç','baslangic_tarihi'],['Bitiş','bitis_tarihi'],['Gün','staj_gun_sayisi']
+      ['Full Name','ad_soyad'],['Student No','ogrenci_no'],['Department','bolum'],
+      ['Company','firma_adi'],['Start','baslangic_tarihi'],['End','bitis_tarihi'],['Days','staj_gun_sayisi']
     ].filter(([,k]) => ext[k])
      .map(([lbl,k]) => `<div class="info-row"><strong>${lbl}:</strong> ${ext[k]}</div>`).join('');
 
-    const eksikHtml = eks.length ? `<div class="eksik-list">⚠️ Eksik: ${eks.join(', ')}</div>` : '';
+    const eksikHtml = eks.length ? `<div class="eksik-list">⚠️ Missing: ${eks.join(', ')}</div>` : '';
 
-    // AI önerisi — sekreter için bilgi amaçlı
+    // AI suggestion — informational only, for the secretary
     const aiOneriCls  = aiOneri === 'KABUL' ? 'ai-oneri-kabul' : aiOneri === 'RED' ? 'ai-oneri-red' : '';
     const aiOneriHtml = aiOneri !== '—'
-      ? `<div class="ai-oneri-badge ${aiOneriCls}">🤖 AI Öneri: ${aiOneri === 'KABUL' ? 'Uygun görünüyor' : 'Dikkat edilmesi gereken noktalar var'}</div>`
+      ? `<div class="ai-oneri-badge ${aiOneriCls}">🤖 AI Suggestion: ${aiOneri === 'KABUL' ? 'Looks suitable' : 'There are points needing attention'}</div>`
       : '';
 
-    // AI Detay paneli
+    // AI Detail panel
     let aiDetayHtml = '';
     if (aiD && (aiD.firma_analizi || aiD.tarih_analizi || aiD.oneriler?.length)) {
       const risk = aiD.risk_skoru || 0;
       const riskRenk = risk < 30 ? '#059669' : risk < 60 ? '#d97706' : '#dc2626';
       aiDetayHtml = `
         <div class="ai-detay-panel">
-          <div class="ai-detay-head">🧠 AI Değerlendirmesi</div>
+          <div class="ai-detay-head">🧠 AI Assessment</div>
           <div class="ai-risk-bar">
             <span>Risk:</span>
             <div class="ai-risk-track"><div class="ai-risk-fill" style="width:${risk}%;background:${riskRenk}"></div></div>
             <strong style="color:${riskRenk}">${risk}/100</strong>
           </div>
-          ${aiD.firma_analizi  ? `<div class="ai-detay-row">🏢 <strong>Firma:</strong> ${aiD.firma_analizi}</div>` : ''}
-          ${aiD.tarih_analizi  ? `<div class="ai-detay-row">📅 <strong>Tarih:</strong> ${aiD.tarih_analizi}</div>` : ''}
-          ${aiD.ogrenci_yorumu ? `<div class="ai-detay-row">👤 <strong>Öğrenci:</strong> ${aiD.ogrenci_yorumu}</div>` : ''}
-          ${aiD.oneriler?.length ? `<div class="ai-detay-row">💡 <strong>Öneriler:</strong><ul>${aiD.oneriler.map(o=>`<li>${o}</li>`).join('')}</ul></div>` : ''}
-          ${aiD.dikkat?.length   ? `<div class="ai-detay-row ai-uyari">⚠️ <strong>Dikkat:</strong><ul>${aiD.dikkat.map(o=>`<li>${o}</li>`).join('')}</ul></div>` : ''}
+          ${aiD.firma_analizi  ? `<div class="ai-detay-row">🏢 <strong>Company:</strong> ${aiD.firma_analizi}</div>` : ''}
+          ${aiD.tarih_analizi  ? `<div class="ai-detay-row">📅 <strong>Dates:</strong> ${aiD.tarih_analizi}</div>` : ''}
+          ${aiD.ogrenci_yorumu ? `<div class="ai-detay-row">👤 <strong>Student:</strong> ${aiD.ogrenci_yorumu}</div>` : ''}
+          ${aiD.oneriler?.length ? `<div class="ai-detay-row">💡 <strong>Suggestions:</strong><ul>${aiD.oneriler.map(o=>`<li>${o}</li>`).join('')}</ul></div>` : ''}
+          ${aiD.dikkat?.length   ? `<div class="ai-detay-row ai-uyari">⚠️ <strong>Attention:</strong><ul>${aiD.dikkat.map(o=>`<li>${o}</li>`).join('')}</ul></div>` : ''}
         </div>`;
     }
 
     const raporHtml = r.ai_rapor
-      ? `<span class="rapor-toggle" onclick="toggleRapor(${r.id})">📄 AI Ham Yanıtı</span><div id="rapor-${r.id}" class="rapor-text">${r.ai_rapor}</div>` : '';
+      ? `<span class="rapor-toggle" onclick="toggleRapor(${r.id})">📄 Raw AI Response</span><div id="rapor-${r.id}" class="rapor-text">${r.ai_rapor}</div>` : '';
 
-    // Aksiyon satırı
+    // Action row
     let aksiyonHtml;
     if (durum === 'onaylandi') {
       aksiyonHtml = `
         <div class="karar-verildi" id="action-${r.id}">
-          <span style="color:#065f46;font-weight:700;">✅ Sekreter Onayladı</span>
-          <button class="btn btn-outline btn-sm" onclick="manuelKarar(${r.id},'RED')">❌ Geri Al (Reddet)</button>
+          <span style="color:#065f46;font-weight:700;">✅ Approved by Secretary</span>
+          <button class="btn btn-outline btn-sm" onclick="manuelKarar(${r.id},'RED')">❌ Undo (Reject)</button>
         </div>`;
     } else if (durum === 'reddedildi') {
       aksiyonHtml = `
         <div class="karar-verildi" id="action-${r.id}">
-          <span style="color:#991b1b;font-weight:700;">❌ Reddedildi</span>
-          <button class="btn btn-outline btn-sm" onclick="manuelKarar(${r.id},'KABUL')">✅ Tekrar Onayla</button>
+          <span style="color:#991b1b;font-weight:700;">❌ Rejected</span>
+          <button class="btn btn-outline btn-sm" onclick="manuelKarar(${r.id},'KABUL')">✅ Approve Again</button>
         </div>`;
     } else {
       aksiyonHtml = `
         <div class="karar-verildi" id="action-${r.id}">
-          <span style="font-size:.82rem;color:#92400e;font-weight:600;">⏳ AI otomatik onaylayamadı — Manuel inceleme gerekiyor</span>
-          <button class="btn btn-success btn-sm" onclick="manuelKarar(${r.id},'KABUL',true)">✅ Onayla (Override)</button>
-          <button class="btn btn-danger btn-sm"  onclick="manuelKarar(${r.id},'RED')">❌ Reddet</button>
+          <span style="font-size:.82rem;color:#92400e;font-weight:600;">⏳ AI could not auto-approve — manual review required</span>
+          <button class="btn btn-success btn-sm" onclick="manuelKarar(${r.id},'KABUL',true)">✅ Approve (Override)</button>
+          <button class="btn btn-danger btn-sm"  onclick="manuelKarar(${r.id},'RED')">❌ Reject</button>
         </div>`;
     }
 
@@ -694,21 +694,21 @@ async function manuelKarar(id, karar, force) {
   const actionBox = document.getElementById('action-' + id);
 
   if (karar === 'RED') {
-    if (actionBox) actionBox.innerHTML = '<span style="color:#92400e;font-size:.85rem;">⏳ Reddediliyor…</span>';
+    if (actionBox) actionBox.innerHTML = '<span style="color:#92400e;font-size:.85rem;">⏳ Rejecting…</span>';
     try {
       await fetch('/api/karar', {
         method: 'POST', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ id, karar: 'RED' }),
       });
-      showToast('❌ Reddedildi.');
+      showToast('❌ Rejected.');
       loadBasvurular();
-    } catch(e) { showToast('❌ Hata: ' + e.message); }
+    } catch(e) { showToast('❌ Error: ' + e.message); }
     return;
   }
 
-  // KABUL — kontroller çalıştır
+  // ACCEPT — run checks
   if (actionBox) actionBox.innerHTML =
-    '<span style="color:#1e40af;font-size:.85rem;">⏳ AI kontrolleri çalışıyor…</span>';
+    '<span style="color:#1e40af;font-size:.85rem;">⏳ Running AI checks…</span>';
 
   try {
     const res  = await fetch('/api/karar', {
@@ -717,18 +717,18 @@ async function manuelKarar(id, karar, force) {
     });
     const data = await res.json();
 
-    if (!data.ok) { showToast('❌ ' + (data.hata || 'Hata')); return; }
+    if (!data.ok) { showToast('❌ ' + (data.hata || 'Error')); return; }
 
     if (data.onaylandi) {
-      showToast('✅ Onaylandı!');
+      showToast('✅ Approved!');
       loadBasvurular();
       return;
     }
 
-    // Kontroller geçmedi — sonuçları göster
+    // Checks failed — show results
     const k = data.kontroller || {};
     const rows = [
-      ['E-İmza', k.e_imza],
+      ['E-Signature', k.e_imza],
       ['Form',   k.form],
       ['AI',     k.ai],
     ].map(([lbl, c]) => {
@@ -738,7 +738,7 @@ async function manuelKarar(id, karar, force) {
       const uyari = (c.uyarilar && c.uyarilar.length)
         ? `<div style="font-size:.75rem;color:#92400e;margin-top:2px;">⚠️ ${c.uyarilar.join(' · ')}</div>` : '';
       const guvenHtml = (lbl === 'AI' && c.guven !== undefined)
-        ? ` <span style="font-size:.75rem;color:#64748b;">(güven: ${Math.round(c.guven * 100)}%)</span>` : '';
+        ? ` <span style="font-size:.75rem;color:#64748b;">(confidence: ${Math.round(c.guven * 100)}%)</span>` : '';
       return `<div class="sek-kontrol-row">
         <span class="sek-kontrol-lbl">${lbl}</span>
         <span style="color:${color};font-weight:700;">${icon}</span>
@@ -749,21 +749,21 @@ async function manuelKarar(id, karar, force) {
 
     if (actionBox) actionBox.innerHTML = `
       <div class="sek-kontrol-panel">
-        <div class="sek-kontrol-baslik">⚠️ Bazı kontroller geçilemedi — Onaylamak için gözden geçirin:</div>
+        <div class="sek-kontrol-baslik">⚠️ Some checks failed — review before approving:</div>
         ${rows}
         <div class="sek-kontrol-actions">
-          <button class="btn btn-danger btn-sm" onclick="manuelKarar(${id},'RED')">❌ Reddet</button>
-          <button class="btn btn-warning btn-sm" onclick="manuelKarar(${id},'KABUL',true)">⚡ Yine de Onayla (Override)</button>
+          <button class="btn btn-danger btn-sm" onclick="manuelKarar(${id},'RED')">❌ Reject</button>
+          <button class="btn btn-warning btn-sm" onclick="manuelKarar(${id},'KABUL',true)">⚡ Approve Anyway (Override)</button>
         </div>
       </div>`;
   } catch(e) {
-    showToast('❌ Hata: ' + e.message);
+    showToast('❌ Error: ' + e.message);
     if (actionBox) actionBox.innerHTML = `<span style="color:#dc2626;">❌ ${_esc(e.message)}</span>`;
   }
 }
 
 function exportCSV() {
-  if (!_allRows.length) { showToast('⚠️ Dışa aktarılacak veri yok.'); return; }
+  if (!_allRows.length) { showToast('⚠️ No data to export.'); return; }
   const headers = ['id','original_adi','yukleme_tarihi','durum','ai_karar','ai_guven',
                    'ad_soyad','ogrenci_no','bolum','firma_adi','baslangic_tarihi','bitis_tarihi','staj_gun_sayisi'];
   const rows = _allRows.map(r => {
@@ -779,32 +779,32 @@ function exportCSV() {
   const a    = document.createElement('a'); a.href = url;
   a.download = `basvurular_${new Date().toISOString().slice(0,10)}.csv`;
   a.click(); URL.revokeObjectURL(url);
-  showToast('✅ CSV indirildi!');
+  showToast('✅ CSV downloaded!');
 }
 
 /* ── 🤖 AGENT ─────────────────────────────────────────────────────────────── */
 function _renderToolSonuc(tool, sonuc) {
-  /* Tool sonucunu kullanıcı dostu formatta göster (sayılar, listeler vs.) */
+  /* Show tool result in a user-friendly format (numbers, lists, etc.) */
   if (!sonuc || sonuc.hata) {
-    return `<div class="agent-hata">❌ ${_esc(sonuc?.hata || 'Sonuç yok')}</div>`;
+    return `<div class="agent-hata">❌ ${_esc(sonuc?.hata || 'No result')}</div>`;
   }
 
   const t = (tool || '').toUpperCase();
 
-  // ISTATISTIK ozet → 4 metrik kartı
+  // ISTATISTIK summary → 4 metric cards
   if (t === 'ISTATISTIK' && 'toplam' in sonuc) {
     return `<div class="agent-stats">
-      <div class="agent-stat-card stat-toplam"><div class="stat-num">${sonuc.toplam}</div><div class="stat-lbl">Toplam</div></div>
-      <div class="agent-stat-card stat-kabul"><div class="stat-num">${sonuc.kabul||0}</div><div class="stat-lbl">Kabul</div></div>
-      <div class="agent-stat-card stat-red"><div class="stat-num">${sonuc.red||0}</div><div class="stat-lbl">Red</div></div>
-      <div class="agent-stat-card stat-bekle"><div class="stat-num">${sonuc.beklemede||0}</div><div class="stat-lbl">Beklemede</div></div>
+      <div class="agent-stat-card stat-toplam"><div class="stat-num">${sonuc.toplam}</div><div class="stat-lbl">Total</div></div>
+      <div class="agent-stat-card stat-kabul"><div class="stat-num">${sonuc.kabul||0}</div><div class="stat-lbl">Accepted</div></div>
+      <div class="agent-stat-card stat-red"><div class="stat-num">${sonuc.red||0}</div><div class="stat-lbl">Rejected</div></div>
+      <div class="agent-stat-card stat-bekle"><div class="stat-num">${sonuc.beklemede||0}</div><div class="stat-lbl">Pending</div></div>
     </div>`;
   }
 
-  // ISTATISTIK firma/bolum → bar chart benzeri liste
+  // ISTATISTIK company/department → bar-chart-like list
   if (t === 'ISTATISTIK' && (sonuc.firma || sonuc.bolum)) {
     const liste = sonuc.firma || sonuc.bolum;
-    const baslik = sonuc.firma ? '🏢 Firmalara Göre Dağılım' : '🎓 Bölümlere Göre Dağılım';
+    const baslik = sonuc.firma ? '🏢 Breakdown by Company' : '🎓 Breakdown by Department';
     const max = Math.max(...liste.map(x => x.sayi), 1);
     let h = `<div class="agent-rank-baslik">${baslik}</div><div class="agent-rank-list">`;
     liste.forEach((it, i) => {
@@ -820,10 +820,10 @@ function _renderToolSonuc(tool, sonuc) {
     return h;
   }
 
-  // LIST_BASVURU / ARA / ONCELIK → başvuru listesi tablosu
+  // LIST_BASVURU / ARA / ONCELIK → application list table
   if ((t === 'LIST_BASVURU' || t === 'ARA' || t === 'ONCELIK' || t === 'ONCELIK_SIRALA') && Array.isArray(sonuc)) {
-    if (sonuc.length === 0) return '<div class="agent-bos">📭 Sonuç bulunamadı.</div>';
-    let h = `<div class="agent-list-baslik">📋 ${sonuc.length} başvuru</div>`;
+    if (sonuc.length === 0) return '<div class="agent-bos">📭 No results found.</div>';
+    let h = `<div class="agent-list-baslik">📋 ${sonuc.length} applications</div>`;
     h += '<div class="agent-basvuru-list">';
     sonuc.forEach(b => {
       const kararCls = b.durum === 'onaylandi' ? 'kabul' : b.durum === 'reddedildi' ? 'red' : 'bekle';
@@ -841,7 +841,7 @@ function _renderToolSonuc(tool, sonuc) {
     return h;
   }
 
-  // GET_BASVURU → tek başvuru detayı
+  // GET_BASVURU → single application detail
   if (t === 'GET_BASVURU' && sonuc.id) {
     const f = sonuc.form || {};
     const kararCls = sonuc.durum === 'onaylandi' ? 'kabul' : sonuc.durum === 'reddedildi' ? 'red' : 'bekle';
@@ -850,8 +850,8 @@ function _renderToolSonuc(tool, sonuc) {
         <span class="agent-basvuru-badge badge-${kararCls}">${_esc(sonuc.durum || '—')}</span>
       </div>
       <div class="agent-detay-grid">`;
-    [['Bölüm','bolum'],['Öğrenci No','ogrenci_no'],['Firma','firma_adi'],
-     ['Başlangıç','baslangic_tarihi'],['Bitiş','bitis_tarihi'],['Gün','staj_gun_sayisi']
+    [['Department','bolum'],['Student No','ogrenci_no'],['Company','firma_adi'],
+     ['Start','baslangic_tarihi'],['End','bitis_tarihi'],['Days','staj_gun_sayisi']
     ].forEach(([lbl,k])=>{
       if (f[k]) h += `<div><span class="lbl">${lbl}:</span> ${_esc(f[k])}</div>`;
     });
@@ -861,7 +861,7 @@ function _renderToolSonuc(tool, sonuc) {
     return h;
   }
 
-  // ONAYLA / REDDET sonuç
+  // ONAYLA / REDDET result
   if ((t === 'ONAYLA' || t === 'REDDET') && sonuc.ok) {
     const ic = t === 'ONAYLA' ? '✅' : '❌';
     return `<div class="agent-islem ${t.toLowerCase()}">
@@ -870,18 +870,18 @@ function _renderToolSonuc(tool, sonuc) {
     </div>`;
   }
 
-  // CEVAP — düz mesaj
+  // CEVAP — plain message
   if (t === 'CEVAP' && sonuc.mesaj) {
     return `<div class="agent-cevap">${mdToHtml(sonuc.mesaj)}</div>`;
   }
 
-  // Bilinmeyen → JSON pretty
+  // Unknown → pretty JSON
   return `<pre class="agent-raw">${_esc(JSON.stringify(sonuc, null, 2).slice(0, 800))}</pre>`;
 }
 
 let _agentBusy = false;
 async function agentGonder(directKomut) {
-  if (_agentBusy) return;   // Çift tıklamayı engelle
+  if (_agentBusy) return;   // prevent double-click
   _agentBusy = true;
 
   const input  = document.getElementById('agent-input');
@@ -889,14 +889,14 @@ async function agentGonder(directKomut) {
   const komut  = directKomut || (input?.value.trim()) || '';
   if (!komut) { _agentBusy = false; return; }
 
-  // Tüm Sor / agent butonlarını disable et
+  // disable all Ask / agent buttons
   document.querySelectorAll('.agent-soru-row button, .agent-action-btn').forEach(b => b.disabled = true);
 
-  // Eski içeriği temizle (üst üste birikmesin)
+  // clear old content (avoid piling up)
   result.style.display = 'block';
   result.innerHTML =
     `<div class="agent-msg agent-msg-user">👤 ${_esc(komut)}</div>` +
-    `<div class="agent-msg agent-loading">⏳ Asistan çalışıyor…</div>`;
+    `<div class="agent-msg agent-loading">⏳ Assistant is working…</div>`;
 
   try {
     const res  = await fetch('/api/agent/komut', {
@@ -909,18 +909,18 @@ async function agentGonder(directKomut) {
 
     if (!data.ok) {
       result.insertAdjacentHTML('beforeend',
-        `<div class="agent-msg agent-hata">❌ ${_esc(data.yanit || 'Hata')}</div>`);
+        `<div class="agent-msg agent-hata">❌ ${_esc(data.yanit || 'Error')}</div>`);
       return;
     }
 
     let html = '<div class="agent-msg agent-msg-bot agent-rich">';
 
-    // 1. ÖZET (en üstte) — açıklama + karar varsa onlar
+    // 1. SUMMARY (at the top) — explanation + decision if present
     if (data.aciklama) {
       html += `<div class="agent-ozet">${mdToHtml(data.aciklama)}</div>`;
     }
 
-    // 2. KARAR (varsa, KABUL/RED/BEKLEME)
+    // 2. DECISION (if present, KABUL/RED/BEKLEME)
     if (data.karar && data.karar.sonuc && data.karar.sonuc !== 'BEKLEME') {
       const sonuc = data.karar.sonuc;
       const kararCls = sonuc === 'KABUL' ? 'kabul' : 'red';
@@ -933,20 +933,20 @@ async function agentGonder(directKomut) {
       }
     }
 
-    // 3. SONUÇLAR (asıl önemli kısım — tool çıktıları)
+    // 3. RESULTS (the main part — tool outputs)
     if (data.tool_calls && data.tool_calls.length) {
       data.tool_calls.forEach(tc => {
         html += _renderToolSonuc(tc.tool, tc.sonuc);
       });
     }
 
-    // 4. ANALİZ (varsa, başvuru analiz edildiyse)
+    // 4. ANALYSIS (if the application was analyzed)
     const a = data.analiz || {};
     if (a.risk_skoru !== undefined && a.gun_durumu) {
       const risk = parseInt(a.risk_skoru || 0);
       const riskRenk = risk < 30 ? '#059669' : risk < 60 ? '#d97706' : '#dc2626';
       html += '<div class="agent-analiz-mini">';
-      html += `<span class="agent-mini-baslik">🔍 Analiz:</span>`;
+      html += `<span class="agent-mini-baslik">🔍 Analysis:</span>`;
       ['gun_durumu','tarih_durumu','firma_durumu','belge_durumu'].forEach(k => {
         if (a[k] && a[k] !== 'BILINMIYOR')
           html += `<span class="agent-analiz-tag">${k.split('_')[0]}: ${_esc(a[k])}</span>`;
@@ -955,14 +955,14 @@ async function agentGonder(directKomut) {
       html += '</div>';
     }
 
-    // 5. TEKNİK DETAY (collapsible — debug bilgisi)
+    // 5. TECHNICAL DETAIL (collapsible — debug info)
     if (data.plan?.length || data.tool_calls?.length) {
-      html += '<details class="agent-detay-toggle"><summary>🛠️ Teknik detay</summary>';
+      html += '<details class="agent-detay-toggle"><summary>🛠️ Technical detail</summary>';
       if (data.plan?.length) {
         html += '<div class="agent-mini-blok"><b>Plan:</b> ' + data.plan.map(p=>`<code>${_esc(p)}</code>`).join(' → ') + '</div>';
       }
       if (data.tool_calls?.length) {
-        html += '<div class="agent-mini-blok"><b>Tool çağrıları:</b><ul>';
+        html += '<div class="agent-mini-blok"><b>Tool calls:</b><ul>';
         data.tool_calls.forEach(tc => {
           html += `<li><code>${_esc(tc.tool)}(${_esc(JSON.stringify(tc.input||{}))})</code>`;
           if (tc.reason) html += ` <span class="agent-mini-reason">— ${_esc(tc.reason)}</span>`;
@@ -976,17 +976,17 @@ async function agentGonder(directKomut) {
     html += '</div>';
     result.insertAdjacentHTML('beforeend', html);
 
-    // ONAYLA/REDDET varsa listeyi yenile
+    // refresh the list if ONAYLA/REDDET happened
     const islemYapildi = (data.tool_calls || []).some(tc =>
       ['ONAYLA','REDDET'].includes((tc.tool||'').toUpperCase()));
     if (islemYapildi) {
       loadBasvurular();
-      showToast('✅ Agent işlem yaptı!');
+      showToast('✅ Agent took action!');
     }
     if (input) input.value = '';
   } catch (e) {
     const loadEl = result.querySelector('.agent-loading');
-    if (loadEl) loadEl.innerHTML = '❌ Hata: ' + e.message;
+    if (loadEl) loadEl.innerHTML = '❌ Error: ' + e.message;
   } finally {
     _agentBusy = false;
     document.querySelectorAll('.agent-soru-row button, .agent-action-btn').forEach(b => b.disabled = false);
@@ -1000,13 +1000,13 @@ function agentHizli(komut) {
   agentGonder(komut);
 }
 
-/* Doğrudan tool çağrısı — LLM bypass, anında sonuç */
+/* Direct tool call — LLM bypass, instant result */
 async function agentDirect(tool, input, baslik) {
   const result = document.getElementById('agent-result');
   result.style.display = 'block';
   result.innerHTML =
     `<div class="agent-msg agent-msg-user">👤 ${_esc(baslik)}</div>` +
-    `<div class="agent-msg agent-loading">⏳ Veriler getiriliyor…</div>`;
+    `<div class="agent-msg agent-loading">⏳ Fetching data…</div>`;
   try {
     const res = await fetch('/api/agent/direct', {
       method: 'POST', headers: {'Content-Type':'application/json'},
@@ -1023,18 +1023,18 @@ async function agentDirect(tool, input, baslik) {
     result.insertAdjacentHTML('beforeend', html);
   } catch (e) {
     const loadEl = result.querySelector('.agent-loading');
-    if (loadEl) loadEl.innerHTML = '❌ Hata: ' + e.message;
+    if (loadEl) loadEl.innerHTML = '❌ Error: ' + e.message;
   }
   result.scrollTop = result.scrollHeight;
 }
 
-/* Çoklu tool çağrısı sırayla */
+/* Multiple tool calls in sequence */
 async function agentDirectMulti(calls, baslik) {
   const result = document.getElementById('agent-result');
   result.style.display = 'block';
   result.innerHTML =
     `<div class="agent-msg agent-msg-user">👤 ${_esc(baslik)}</div>` +
-    `<div class="agent-msg agent-loading">⏳ Veriler getiriliyor…</div>`;
+    `<div class="agent-msg agent-loading">⏳ Fetching data…</div>`;
   try {
     const sonuclar = await Promise.all(calls.map(c =>
       fetch('/api/agent/direct', {
@@ -1054,7 +1054,7 @@ async function agentDirectMulti(calls, baslik) {
     result.insertAdjacentHTML('beforeend', html);
   } catch (e) {
     const loadEl = result.querySelector('.agent-loading');
-    if (loadEl) loadEl.innerHTML = '❌ Hata: ' + e.message;
+    if (loadEl) loadEl.innerHTML = '❌ Error: ' + e.message;
   }
   result.scrollTop = result.scrollHeight;
 }
@@ -1067,12 +1067,12 @@ function agentSoru() {
   if (!visible) document.getElementById('agent-input')?.focus();
 }
 
-/* ── AI ÖZET ──────────────────────────────────────────────────────────────── */
+/* ── AI SUMMARY ──────────────────────────────────────────────────────────────── */
 async function aiOzet() {
   const card = document.getElementById('ai-ozet-card');
   const body = document.getElementById('ai-ozet-body');
   card.style.display = 'block';
-  body.innerHTML = '<div style="padding:20px;text-align:center;color:#64748b;">⏳ AI özet hazırlanıyor… (bu 30 saniye sürebilir)</div>';
+  body.innerHTML = '<div style="padding:20px;text-align:center;color:#64748b;">⏳ Preparing AI summary… (this may take 30 seconds)</div>';
   try {
     const res  = await fetch('/api/ai-ozet');
     const data = await res.json();
@@ -1082,7 +1082,7 @@ async function aiOzet() {
   }
 }
 
-/* ── SEKRETER SEKMELERİ ───────────────────────────────────────────────────── */
+/* ── SECRETARY TABS ───────────────────────────────────────────────────── */
 function sekmeAc(btn, sekme) {
   document.querySelectorAll('.sek-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
@@ -1094,13 +1094,13 @@ function sekmeAc(btn, sekme) {
   if (sekme === 'dokumanlar') loadDokumanlar();
 }
 
-/* ── DÖKÜMAN YÖNETİMİ ─────────────────────────────────────────────────────── */
+/* ── DOCUMENT MANAGEMENT ─────────────────────────────────────────────────────── */
 async function loadDokumanlar() {
   const list = document.getElementById('dok-list');
   const yonergeBadge = document.getElementById('dok-yonerge-badge');
   const yonergeMeta  = document.getElementById('yonerge-mevcut-meta');
   if (!list) return;
-  list.innerHTML = '⏳ Yükleniyor…';
+  list.innerHTML = '⏳ Loading…';
   try {
     const res = await fetch('/api/docs');
     const data = await res.json();
@@ -1112,12 +1112,12 @@ async function loadDokumanlar() {
         yonergeMeta.innerHTML =
           `<strong>${yonerge.size_kb} KB</strong> · ` +
           `<strong>${yonerge.chunks}</strong> chunk` +
-          (yonerge.guncel ? ` · son güncelleme: <strong>${yonerge.guncel}</strong>` : '');
+          (yonerge.guncel ? ` · last updated: <strong>${yonerge.guncel}</strong>` : '');
       }
     }
     const ekler = docs.filter(d => !d.is_yonerge);
     if (ekler.length === 0) {
-      list.innerHTML = '<div class="dok-empty">📭 Henüz ek doküman yok.</div>';
+      list.innerHTML = '<div class="dok-empty">📭 No additional documents yet.</div>';
       return;
     }
     list.innerHTML = ekler.map(d => `
@@ -1130,14 +1130,14 @@ async function loadDokumanlar() {
           </div>
         </div>
         <div class="dok-actions">
-          <a href="/api/docs/view/${encodeURIComponent(d.name)}" target="_blank" class="btn btn-outline btn-sm" title="Görüntüle">👁️</a>
-          <a href="/api/docs/view/${encodeURIComponent(d.name)}?indir=1" class="btn btn-outline btn-sm" title="İndir">⬇️</a>
-          <button class="btn btn-danger btn-sm" onclick="dokSil('${_esc(d.name)}')" title="Sil">🗑️</button>
+          <a href="/api/docs/view/${encodeURIComponent(d.name)}" target="_blank" class="btn btn-outline btn-sm" title="View">👁️</a>
+          <a href="/api/docs/view/${encodeURIComponent(d.name)}?indir=1" class="btn btn-outline btn-sm" title="Download">⬇️</a>
+          <button class="btn btn-danger btn-sm" onclick="dokSil('${_esc(d.name)}')" title="Delete">🗑️</button>
         </div>
       </div>
     `).join('');
   } catch (e) {
-    list.innerHTML = '<div class="dok-empty">❌ Yüklenemedi: ' + e.message + '</div>';
+    list.innerHTML = '<div class="dok-empty">❌ Could not load: ' + e.message + '</div>';
   }
 }
 
@@ -1145,7 +1145,7 @@ const yonergeFile = document.getElementById('yonerge-file');
 if (yonergeFile) {
   yonergeFile.addEventListener('change', () => {
     const f = yonergeFile.files[0];
-    document.getElementById('yonerge-file-name').textContent = f ? f.name : 'Dosya seçilmedi';
+    document.getElementById('yonerge-file-name').textContent = f ? f.name : 'No file selected';
     document.getElementById('btn-yonerge-update').disabled = !f;
   });
 }
@@ -1155,10 +1155,10 @@ async function yonergeGuncelle() {
   if (!f) return;
   const result = document.getElementById('yonerge-result');
   const btn = document.getElementById('btn-yonerge-update');
-  btn.disabled = true; btn.innerHTML = '<span class="spin">⏳</span> Güncelleniyor…';
+  btn.disabled = true; btn.innerHTML = '<span class="spin">⏳</span> Updating…';
   result.style.display = 'block';
   result.className = 'yonerge-result info';
-  result.textContent = '⏳ Yönerge yükleniyor ve indeksleniyor…';
+  result.textContent = '⏳ Uploading and indexing the directive…';
   const fd = new FormData();
   fd.append('pdf', f);
   try {
@@ -1166,21 +1166,21 @@ async function yonergeGuncelle() {
     const data = await res.json();
     if (data.ok) {
       result.className = 'yonerge-result success';
-      result.innerHTML = `✅ <strong>${data.mesaj}</strong><br>Boyut: ${data.boyut_kb} KB · ${data.karakter} karakter`;
-      showToast('✅ Yönerge güncellendi!');
+      result.innerHTML = `✅ <strong>${data.mesaj}</strong><br>Size: ${data.boyut_kb} KB · ${data.karakter} characters`;
+      showToast('✅ Directive updated!');
       loadDokumanlar();
-      // Yönerge değiştiyse kuralları da yenile
+      // refresh the rules too if the directive changed
       if (typeof loadKurallar === 'function') loadKurallar();
     } else {
       result.className = 'yonerge-result error';
-      result.textContent = '❌ ' + (data.hata || 'Hata');
+      result.textContent = '❌ ' + (data.hata || 'Error');
     }
   } catch (e) {
     result.className = 'yonerge-result error';
-    result.textContent = '❌ Bağlantı hatası: ' + e.message;
+    result.textContent = '❌ Connection error: ' + e.message;
   } finally {
-    btn.disabled = false; btn.innerHTML = '⬆️ Yönergeyi Güncelle';
-    document.getElementById('yonerge-file-name').textContent = 'Dosya seçilmedi';
+    btn.disabled = false; btn.innerHTML = '⬆️ Update Directive';
+    document.getElementById('yonerge-file-name').textContent = 'No file selected';
     document.getElementById('yonerge-file').value = '';
   }
 }
@@ -1190,38 +1190,38 @@ async function dokYukle(input) {
   if (!f) return;
   const fd = new FormData();
   fd.append('pdf', f);
-  showToast('⏳ Doküman yükleniyor…');
+  showToast('⏳ Uploading document…');
   try {
     const res = await fetch('/api/docs/upload', { method: 'POST', body: fd });
     const data = await res.json();
     if (data.ok) {
-      showToast(`✅ ${data.dosya} eklendi`);
+      showToast(`✅ ${data.dosya} added`);
       loadDokumanlar();
     } else {
-      showToast('❌ ' + (data.hata || 'Hata'));
+      showToast('❌ ' + (data.hata || 'Error'));
     }
   } catch (e) { showToast('❌ ' + e.message); }
   input.value = '';
 }
 
-/* PDF görüntüle — yeni pencerede aç (Simple Browser dışına çıkmayı zorla) */
+/* View PDF — open in a new window (force it out of the Simple Browser) */
 function dokGoruntule(url) {
-  // window.open ile yeni pencere — VS Code Simple Browser bunu çoğunlukla
-  // dışarı (gerçek tarayıcıya) yönlendirir
+  // window.open with a new window — VS Code Simple Browser will usually
+  // redirect this out (to the real browser)
   const win = window.open(url, '_blank', 'noopener,noreferrer');
   if (!win) {
-    // Popup engellendiyse: link kopyala
+    // if the popup was blocked: copy the link
     navigator.clipboard?.writeText(window.location.origin + url);
-    showToast('🔗 Link panoya kopyalandı, tarayıcıya yapıştır');
+    showToast('🔗 Link copied to clipboard, paste it into your browser');
   }
 }
 
-/* PDF indir — Blob olarak fetch edip <a download> ile indirme tetikle */
+/* Download PDF — fetch as a Blob and trigger the download via <a download> */
 async function dokIndir(url, dosyaAdi) {
-  showToast('⏳ İndiriliyor…');
+  showToast('⏳ Downloading…');
   try {
     const res = await fetch(url);
-    if (!res.ok) throw new Error('Dosya bulunamadı');
+    if (!res.ok) throw new Error('File not found');
     const blob = await res.blob();
     const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1231,14 +1231,14 @@ async function dokIndir(url, dosyaAdi) {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-    showToast('✅ İndirildi: ' + (dosyaAdi || 'dokuman.pdf'));
+    showToast('✅ Downloaded: ' + (dosyaAdi || 'dokuman.pdf'));
   } catch (e) {
-    showToast('❌ İndirme hatası: ' + e.message);
+    showToast('❌ Download error: ' + e.message);
   }
 }
 
 async function dokSil(name) {
-  if (!confirm(`"${name}" dosyasını silmek istediğinize emin misiniz?`)) return;
+  if (!confirm(`Are you sure you want to delete "${name}"?`)) return;
   try {
     const res = await fetch('/api/docs/delete', {
       method: 'POST', headers: {'Content-Type':'application/json'},
@@ -1246,15 +1246,15 @@ async function dokSil(name) {
     });
     const data = await res.json();
     if (data.ok) {
-      showToast('🗑️ Silindi');
+      showToast('🗑️ Deleted');
       loadDokumanlar();
     } else {
-      showToast('❌ ' + (data.hata || 'Hata'));
+      showToast('❌ ' + (data.hata || 'Error'));
     }
   } catch (e) { showToast('❌ ' + e.message); }
 }
 
-/* ── BİLDİRİMLER ──────────────────────────────────────────────────────────── */
+/* ── NOTIFICATIONS ──────────────────────────────────────────────────────────── */
 let _bildirimAcik = false;
 
 async function loadBildirimSayisi() {
@@ -1284,7 +1284,7 @@ async function loadBildirimler() {
   try {
     const res  = await fetch('/api/bildirimler');
     const rows = await res.json();
-    if (!rows.length) { list.innerHTML = '<div class="notif-empty">Bildirim yok</div>'; return; }
+    if (!rows.length) { list.innerHTML = '<div class="notif-empty">No notifications</div>'; return; }
     list.innerHTML = rows.map(r => `
       <div class="notif-item ${r.okundu ? 'okundu' : 'yeni'}" onclick="bildirimTikla(${r.id},${r.link_id||0},'${r.tip}')">
         <span class="notif-icon">${r.tip === 'rapor' ? '📝' : '📋'}</span>
@@ -1294,7 +1294,7 @@ async function loadBildirimler() {
         </div>
         ${!r.okundu ? '<span class="notif-dot"></span>' : ''}
       </div>`).join('');
-  } catch { list.innerHTML = '<div class="notif-empty">Yüklenemedi</div>'; }
+  } catch { list.innerHTML = '<div class="notif-empty">Could not load</div>'; }
 }
 
 async function bildirimTikla(id, linkId, tip) {
@@ -1320,13 +1320,13 @@ async function tumunuOku(e) {
   loadBildirimler();
 }
 
-// Sekreter ise periyodik kontrol
+// periodic check if secretary
 if (document.getElementById('notif-badge')) {
   loadBildirimSayisi();
   setInterval(loadBildirimSayisi, 30000);
 }
 
-// Dropdown dışına tıklanınca kapat
+// close when clicking outside the dropdown
 document.addEventListener('click', e => {
   const wrap = document.querySelector('.notif-wrap');
   if (wrap && !wrap.contains(e.target)) {
@@ -1335,12 +1335,12 @@ document.addEventListener('click', e => {
   }
 });
 
-/* ── RAPOR YÜKLEME (öğrenci) ─────────────────────────────────────────────── */
+/* ── REPORT UPLOAD (student) ─────────────────────────────────────────────── */
 const raporFile = document.getElementById('rapor-file');
 if (raporFile) {
   raporFile.addEventListener('change', () => {
     const f = raporFile.files[0];
-    document.getElementById('rapor-file-name').textContent = f ? f.name : 'Dosya seçilmedi';
+    document.getElementById('rapor-file-name').textContent = f ? f.name : 'No file selected';
     document.getElementById('btn-rapor-yukle').disabled = !f;
   });
 }
@@ -1349,9 +1349,9 @@ async function raporYukle() {
   const file  = document.getElementById('rapor-file')?.files[0];
   const subId = document.getElementById('rapor-sub-id')?.value;
   const result = document.getElementById('rapor-result');
-  if (!file || !subId) { showToast('⚠️ Başvuru ID ve rapor dosyası seçin.'); return; }
+  if (!file || !subId) { showToast('⚠️ Select an application ID and a report file.'); return; }
   const btn = document.getElementById('btn-rapor-yukle');
-  btn.disabled = true; btn.innerHTML = '<span class="spin">⏳</span> Yükleniyor…';
+  btn.disabled = true; btn.innerHTML = '<span class="spin">⏳</span> Uploading…';
   const fd = new FormData();
   fd.append('rapor', file);
   fd.append('submission_id', subId);
@@ -1361,24 +1361,24 @@ async function raporYukle() {
     result.style.display = 'block';
     result.style.cssText = 'display:block;padding:8px 12px;border-radius:8px;font-size:.85rem;' +
       (data.ok ? 'background:#d1fae5;color:#065f46;' : 'background:#fee2e2;color:#991b1b;');
-    result.textContent = data.ok ? '✅ Rapor başarıyla yüklendi!' : '❌ ' + (data.hata || 'Hata');
-    if (data.ok) showToast('✅ Staj raporu gönderildi!');
+    result.textContent = data.ok ? '✅ Report uploaded successfully!' : '❌ ' + (data.hata || 'Error');
+    if (data.ok) showToast('✅ Internship report submitted!');
   } catch (e) {
     result.style.display = 'block';
-    result.textContent = '❌ Bağlantı hatası';
+    result.textContent = '❌ Connection error';
   } finally {
-    btn.disabled = false; btn.innerHTML = '<span>📤</span> Yükle';
+    btn.disabled = false; btn.innerHTML = '<span>📤</span> Upload';
   }
 }
 
-/* ── RAPOR LİSTESİ (sekreter) ────────────────────────────────────────────── */
+/* ── REPORT LIST (secretary) ────────────────────────────────────────────── */
 async function loadRaporlar() {
   const list = document.getElementById('tab-raporlar');
-  list.innerHTML = '<div class="empty-state">⏳ Yükleniyor…</div>';
+  list.innerHTML = '<div class="empty-state">⏳ Loading…</div>';
   try {
     const res  = await fetch('/api/rapor/liste');
     const rows = await res.json();
-    if (!rows.length) { list.innerHTML = '<div class="empty-state">📭 Rapor yok.</div>'; return; }
+    if (!rows.length) { list.innerHTML = '<div class="empty-state">📭 No reports.</div>'; return; }
     const durumRenk = { beklemede:'#fef3c7', incelendi:'#d1fae5', reddedildi:'#fee2e2' };
     list.innerHTML = rows.map(r => {
       let analiz = null;
@@ -1387,31 +1387,31 @@ async function loadRaporlar() {
       const skorRenk = skor >= 7 ? '#059669' : skor >= 4 ? '#d97706' : '#dc2626';
       const aiBadge = analiz
         ? `<span class="ai-badge" style="background:${skorRenk}20;color:${skorRenk}">🧠 AI: ${skor}/10</span>`
-        : `<span class="ai-badge" style="background:#fef3c7;color:#92400e">⏳ AI bekliyor</span>`;
+        : `<span class="ai-badge" style="background:#fef3c7;color:#92400e">⏳ Awaiting AI</span>`;
       const analizHtml = analiz ? `
         <div class="ai-detay-panel" style="margin-top:10px">
-          <div class="ai-detay-head">🧠 AI Rapor Analizi <span style="float:right;color:${skorRenk}">Kalite: ${skor}/10</span></div>
-          ${analiz.ozet ? `<div class="ai-detay-row">📝 <strong>Özet:</strong> ${analiz.ozet}</div>` : ''}
-          ${analiz.guclu_yonler?.length ? `<div class="ai-detay-row">✅ <strong>Güçlü:</strong><ul>${analiz.guclu_yonler.map(x=>`<li>${x}</li>`).join('')}</ul></div>` : ''}
-          ${analiz.eksikler?.length ? `<div class="ai-detay-row ai-uyari">⚠️ <strong>Eksik:</strong><ul>${analiz.eksikler.map(x=>`<li>${x}</li>`).join('')}</ul></div>` : ''}
-          ${analiz.oneriler?.length ? `<div class="ai-detay-row">💡 <strong>Öneri:</strong><ul>${analiz.oneriler.map(x=>`<li>${x}</li>`).join('')}</ul></div>` : ''}
+          <div class="ai-detay-head">🧠 AI Report Analysis <span style="float:right;color:${skorRenk}">Quality: ${skor}/10</span></div>
+          ${analiz.ozet ? `<div class="ai-detay-row">📝 <strong>Summary:</strong> ${analiz.ozet}</div>` : ''}
+          ${analiz.guclu_yonler?.length ? `<div class="ai-detay-row">✅ <strong>Strengths:</strong><ul>${analiz.guclu_yonler.map(x=>`<li>${x}</li>`).join('')}</ul></div>` : ''}
+          ${analiz.eksikler?.length ? `<div class="ai-detay-row ai-uyari">⚠️ <strong>Missing:</strong><ul>${analiz.eksikler.map(x=>`<li>${x}</li>`).join('')}</ul></div>` : ''}
+          ${analiz.oneriler?.length ? `<div class="ai-detay-row">💡 <strong>Suggestions:</strong><ul>${analiz.oneriler.map(x=>`<li>${x}</li>`).join('')}</ul></div>` : ''}
         </div>` : '';
       return `
       <div class="basvuru-card" style="border-left:4px solid #4f46e5;padding:14px 18px;">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
           <div>
-            <strong>📝 Başvuru #${r.submission_id}</strong> — ${r.dosya_adi} ${aiBadge}
+            <strong>📝 Application #${r.submission_id}</strong> — ${r.dosya_adi} ${aiBadge}
             <div style="font-size:.78rem;color:var(--gray-400);margin-top:2px;">${r.yukleme_tarihi}</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <span style="background:${durumRenk[r.durum]||'#f1f5f9'};padding:3px 10px;border-radius:20px;font-size:.8rem;font-weight:600;">${r.durum}</span>
-            <a href="/api/rapor/indir/${r.id}" class="btn btn-outline btn-sm">⬇️ İndir</a>
-            <button class="btn btn-primary btn-sm" onclick="aiAnaliz(${r.id})">🧠 AI Analiz</button>
-            <button class="btn btn-success btn-sm" onclick="raporKarar(${r.id},'incelendi')">✅ İncelendi</button>
-            <button class="btn btn-danger  btn-sm" onclick="raporKarar(${r.id},'reddedildi')">❌ Reddet</button>
+            <a href="/api/rapor/indir/${r.id}" class="btn btn-outline btn-sm">⬇️ Download</a>
+            <button class="btn btn-primary btn-sm" onclick="aiAnaliz(${r.id})">🧠 AI Analysis</button>
+            <button class="btn btn-success btn-sm" onclick="raporKarar(${r.id},'incelendi')">✅ Reviewed</button>
+            <button class="btn btn-danger  btn-sm" onclick="raporKarar(${r.id},'reddedildi')">❌ Reject</button>
           </div>
         </div>
-        ${r.sekreter_notu ? `<div style="margin-top:8px;font-size:.83rem;color:var(--gray-600);">Not: ${r.sekreter_notu}</div>` : ''}
+        ${r.sekreter_notu ? `<div style="margin-top:8px;font-size:.83rem;color:var(--gray-600);">Note: ${r.sekreter_notu}</div>` : ''}
         ${analizHtml}
       </div>`;
     }).join('');
@@ -1419,12 +1419,12 @@ async function loadRaporlar() {
 }
 
 async function aiAnaliz(id) {
-  showToast('🧠 AI rapor analizi başladı… (30-60 sn)');
+  showToast('🧠 AI report analysis started… (30-60 sec)');
   try {
     const res  = await fetch(`/api/rapor/analiz/${id}`, { method: 'POST' });
     const data = await res.json();
-    if (data.ok) { showToast('✅ AI analiz tamamlandı!'); loadRaporlar(); }
-    else         { showToast('❌ ' + (data.hata || 'Hata')); }
+    if (data.ok) { showToast('✅ AI analysis complete!'); loadRaporlar(); }
+    else         { showToast('❌ ' + (data.hata || 'Error')); }
   } catch (e) { showToast('❌ ' + e.message); }
 }
 
@@ -1433,11 +1433,11 @@ async function raporKarar(id, durum) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, durum }),
   });
-  showToast(durum === 'incelendi' ? '✅ Rapor incelendi.' : '❌ Rapor reddedildi.');
+  showToast(durum === 'incelendi' ? '✅ Report reviewed.' : '❌ Report rejected.');
   loadRaporlar();
 }
 
-/* ── BÖLÜM BAŞKANI DURUM TAKİP ───────────────────────────────────────────── */
+/* ── DEPARTMENT HEAD STATUS TRACKING ───────────────────────────────────────────── */
 let _bbSorguId   = null;
 let _bbPollTimer = null;
 
@@ -1449,29 +1449,29 @@ function renderBBDurum(data) {
 
   if (!d || d === 'bekliyor') {
     box.className = 'bb-status-card bekliyor';
-    box.innerHTML = '⏳ <strong>Bölüm Başkanı onayı bekleniyor…</strong><br>'
-      + '<span style="font-size:.8rem;color:#92400e;">BB formu inceleyip e-imzalayana kadar bekleyin.</span>';
+    box.innerHTML = '⏳ <strong>Awaiting Department Head approval…</strong><br>'
+      + '<span style="font-size:.8rem;color:#92400e;">Wait until the Department Head reviews and e-signs the form.</span>';
     if (btnSek) btnSek.style.display = 'none';
 
   } else if (d === 'onaylandi') {
     const id = _bbSorguId || document.getElementById('bb-sorgu-id')?.value;
     box.className = 'bb-status-card onaylandi';
-    box.innerHTML = `✅ <strong>Bölüm Başkanı Onayladı!</strong> — ${data.bb_ad || ''} (${data.bb_tarih || ''})<br>`
-      + `<a href="/api/bb/imzali-pdf/${id}" class="btn btn-outline btn-sm" style="margin-top:8px;" download>📥 İmzalı PDF İndir</a>`;
-    // Sekreter ilet butonunu aktif et
+    box.innerHTML = `✅ <strong>Approved by Department Head!</strong> — ${data.bb_ad || ''} (${data.bb_tarih || ''})<br>`
+      + `<a href="/api/bb/imzali-pdf/${id}" class="btn btn-outline btn-sm" style="margin-top:8px;" download>📥 Download Signed PDF</a>`;
+    // enable the "send to secretary" button
     if (btnSek) {
       btnSek.style.display = 'inline-flex';
       btnSek.disabled = (data.durum === 'sekreter_bekliyor' || data.durum === 'onaylandi' || data.durum === 'reddedildi');
       if (data.durum === 'sekreter_bekliyor')
-        btnSek.innerHTML = '✅ Sekretere İletildi';
+        btnSek.innerHTML = '✅ Sent to Secretary';
     }
     if (_bbPollTimer) { clearInterval(_bbPollTimer); _bbPollTimer = null; }
     loadBelgelerim();
 
   } else if (d === 'reddedildi') {
     box.className = 'bb-status-card reddedildi';
-    box.innerHTML = '❌ <strong>Bölüm Başkanı Reddetti.</strong><br>'
-      + '<span style="font-size:.8rem;">Eksikleri tamamlayıp yeniden başvurun.</span>';
+    box.innerHTML = '❌ <strong>Rejected by Department Head.</strong><br>'
+      + '<span style="font-size:.8rem;">Complete the missing items and reapply.</span>';
     if (btnSek) btnSek.style.display = 'none';
     if (_bbPollTimer) { clearInterval(_bbPollTimer); _bbPollTimer = null; }
   }
@@ -1480,96 +1480,96 @@ function renderBBDurum(data) {
 async function iletSekreter() {
   const id  = _bbSorguId || document.getElementById('bb-sorgu-id')?.value;
   const btn = document.getElementById('btn-sekreter-ilet');
-  if (!id) { showToast('⚠️ Başvuru No bulunamadı.'); return; }
-  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ İletiliyor…'; }
+  if (!id) { showToast('⚠️ Application No not found.'); return; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Sending…'; }
   try {
     const res  = await fetch(`/api/sekreter-ilet/${id}`, { method: 'POST' });
     const data = await res.json();
     if (data.ok) {
-      if (btn) { btn.disabled = true; btn.innerHTML = '✅ İletildi'; }
+      if (btn) { btn.disabled = true; btn.innerHTML = '✅ Sent'; }
       const box = document.getElementById('bb-status-box');
       const oto = data.oto_onaylandi;
       if (box) {
         const k = data.kontroller || {};
-        const satirlar = [['E-İmza',k.e_imza],['Form',k.form],['AI',k.ai]].map(([lbl,c]) => {
+        const satirlar = [['E-Signature',k.e_imza],['Form',k.form],['AI',k.ai]].map(([lbl,c]) => {
           if (!c) return '';
           return `<div style="font-size:.78rem;">${c.ok?'✅':'❌'} <strong>${lbl}:</strong> ${_esc(c.mesaj)}</div>`;
         }).join('');
         const renk  = oto ? '#065f46' : '#92400e';
-        const mesaj = oto ? '🤖 Model otomatik onayladı ✅' : '⚠️ Otomatik onay başarısız — Sekreter inceleyecek';
+        const mesaj = oto ? '🤖 The model approved it automatically ✅' : '⚠️ Automatic approval failed — the Secretary will review it';
         box.innerHTML += `<div style="margin-top:10px;padding:10px 12px;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;">
           <div style="font-weight:700;color:${renk};margin-bottom:6px;">${mesaj}</div>
           ${satirlar}
         </div>`;
       }
-      showToast(oto ? '🤖 AI otomatik onayladı!' : '📨 Sekretere iletildi, manuel inceleme gerekiyor.');
+      showToast(oto ? '🤖 AI approved it automatically!' : '📨 Sent to the Secretary, manual review required.');
     } else {
-      showToast('❌ ' + (data.hata || 'Hata'));
-      if (btn) { btn.disabled = false; btn.innerHTML = '🚀 Sekretere İlet'; }
+      showToast('❌ ' + (data.hata || 'Error'));
+      if (btn) { btn.disabled = false; btn.innerHTML = '🚀 Send to Secretary'; }
     }
   } catch (e) {
     showToast('❌ ' + e.message);
-    if (btn) { btn.disabled = false; btn.innerHTML = '🚀 Sekretere İlet'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '🚀 Send to Secretary'; }
   }
 }
 
 async function sorgulaBBDurum(sessiz = false) {
   const idEl = document.getElementById('bb-sorgu-id');
   const id   = idEl?.value || _bbSorguId;
-  if (!id) { if (!sessiz) showToast('⚠️ Başvuru No girin.'); return; }
+  if (!id) { if (!sessiz) showToast('⚠️ Enter the Application No.'); return; }
   _bbSorguId = id;
   try {
     const res  = await fetch(`/api/basvuru-durum/${id}`);
     const data = await res.json();
-    if (!data.ok) { if (!sessiz) showToast('❌ ' + (data.hata || 'Bulunamadı')); return; }
+    if (!data.ok) { if (!sessiz) showToast('❌ ' + (data.hata || 'Not found')); return; }
     const wrap = document.getElementById('bb-durum-wrap');
     if (wrap) wrap.style.display = 'block';
     renderBBDurum(data);
   } catch(e) { if (!sessiz) showToast('❌ ' + e.message); }
 }
 
-/* ── ONAYLANMIŞ BELGELERİM ───────────────────────────────────────────────── */
+/* ── MY APPROVED DOCUMENTS ───────────────────────────────────────────────── */
 async function loadBelgelerim() {
   const list = document.getElementById('belgelerim-list');
   if (!list) return;
-  list.innerHTML = '<div class="belge-empty">⏳ Yükleniyor…</div>';
+  list.innerHTML = '<div class="belge-empty">⏳ Loading…</div>';
   try {
     const res  = await fetch('/api/ogrenci/onaylananlar');
     const rows = await res.json();
     if (!rows.length) {
-      list.innerHTML = '<div class="belge-empty">📭 Henüz onaylanmış belge yok.</div>';
+      list.innerHTML = '<div class="belge-empty">📭 No approved documents yet.</div>';
       return;
     }
     list.innerHTML = rows.map(r => {
       const iletildi = r.durum === 'sekreter_bekliyor' || r.durum === 'onaylandi';
       const iletBtn  = iletildi
-        ? `<button class="btn btn-outline btn-sm" disabled>✅ Sekretere İletildi</button>`
-        : `<button class="btn btn-primary btn-sm" onclick="belgeyiIlet(${r.id}, this)">🚀 Sekretere İlet</button>`;
+        ? `<button class="btn btn-outline btn-sm" disabled>✅ Sent to Secretary</button>`
+        : `<button class="btn btn-primary btn-sm" onclick="belgeyiIlet(${r.id}, this)">🚀 Send to Secretary</button>`;
       return `
       <div class="belge-card" id="belge-${r.id}">
         <div class="belge-card-top">
           <div>
             <div class="belge-ad">${_esc(r.ad)}</div>
             <div class="belge-meta">#${r.id} · ${_esc(r.firma)} · ${_esc(r.bolum)}</div>
-            <div class="belge-tarih">${_esc(r.bas)} – ${_esc(r.bit)} (${_esc(r.gun)} gün)</div>
+            <div class="belge-tarih">${_esc(r.bas)} – ${_esc(r.bit)} (${_esc(r.gun)} days)</div>
           </div>
           <div class="belge-badge-wrap">
-            <span class="bb-onay-badge">✅ BB: ${_esc(r.bb_ad)} (${_esc(r.bb_tarih)})</span>
+            <span class="bb-onay-badge">✅ Dept. Head: ${_esc(r.bb_ad)} (${_esc(r.bb_tarih)})</span>
           </div>
         </div>
         <div class="belge-card-actions">
-          <a href="/api/bb/imzali-pdf/${r.id}" class="btn btn-outline btn-sm" download>📥 İmzalı PDF İndir</a>
+          <a href="/api/bb/imzali-pdf/${r.id}" class="btn btn-outline btn-sm" download>📥 Download Signed PDF</a>
           ${iletBtn}
         </div>
       </div>`;
     }).join('');
   } catch(e) {
-    list.innerHTML = `<div class="belge-empty">❌ Hata: ${e.message}</div>`;
+    list.innerHTML = `<div class="belge-empty">❌ Error: ${e.message}</div>`;
   }
 }
 
 async function belgeyiIlet(id, btn) {
-  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ AI kontrol ediliyor…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Running AI check…'; }
   const card = document.getElementById('belge-' + id);
   try {
     const res  = await fetch(`/api/sekreter-ilet/${id}`, { method: 'POST' });
@@ -1577,12 +1577,12 @@ async function belgeyiIlet(id, btn) {
     if (data.ok) {
       _renderSekreterAiSonuc(card, id, data);
     } else {
-      showToast('❌ ' + (data.hata || 'Hata'));
-      if (btn) { btn.disabled = false; btn.innerHTML = '🚀 Sekretere İlet'; }
+      showToast('❌ ' + (data.hata || 'Error'));
+      if (btn) { btn.disabled = false; btn.innerHTML = '🚀 Send to Secretary'; }
     }
   } catch(e) {
     showToast('❌ ' + e.message);
-    if (btn) { btn.disabled = false; btn.innerHTML = '🚀 Sekretere İlet'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '🚀 Send to Secretary'; }
   }
 }
 
@@ -1590,7 +1590,7 @@ function _renderSekreterAiSonuc(card, id, data) {
   const k = data.kontroller || {};
   const oto = data.oto_onaylandi;
   const satirlar = [
-    ['E-İmza', k.e_imza],
+    ['E-Signature', k.e_imza],
     ['Form',   k.form],
     ['AI',     k.ai],
   ].map(([lbl, c]) => {
@@ -1598,7 +1598,7 @@ function _renderSekreterAiSonuc(card, id, data) {
     const icon  = c.ok ? '✅' : '❌';
     const color = c.ok ? '#065f46' : '#991b1b';
     const guv   = (lbl === 'AI' && c.guven !== undefined)
-      ? ` <span style="font-size:.75rem;color:#64748b;">(güven: ${Math.round(c.guven*100)}%)</span>` : '';
+      ? ` <span style="font-size:.75rem;color:#64748b;">(confidence: ${Math.round(c.guven*100)}%)</span>` : '';
     const uyari = (c.uyarilar && c.uyarilar.length)
       ? `<div style="font-size:.74rem;color:#92400e;margin-top:1px;">⚠️ ${c.uyarilar.join(' · ')}</div>` : '';
     return `<div class="sek-kontrol-row">
@@ -1610,10 +1610,10 @@ function _renderSekreterAiSonuc(card, id, data) {
 
   const sonucHtml = oto
     ? `<div style="background:#d1fae5;border:1.5px solid #6ee7b7;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:.84rem;color:#065f46;font-weight:700;">
-        🤖 Model otomatik onayladı ✅
+        🤖 The model approved it automatically ✅
        </div>`
     : `<div style="background:#fef9c3;border:1.5px solid #fcd34d;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:.84rem;color:#92400e;font-weight:700;">
-        ⚠️ Otomatik onay başarısız — Sekreter manuel inceleyecek
+        ⚠️ Automatic approval failed — the Secretary will review it manually
        </div>`;
 
   if (card) {
@@ -1624,10 +1624,11 @@ function _renderSekreterAiSonuc(card, id, data) {
         <div class="sek-kontrol-panel" style="margin-top:4px;">${satirlar}</div>
       </div>`;
   }
-  showToast(oto ? '🤖 AI otomatik onayladı!' : '📨 Sekretere iletildi, manuel inceleme gerekiyor.');
+  showToast(oto ? '🤖 AI approved it automatically!' : '📨 Sent to the Secretary, manual review required.');
 }
 
 /* ── TOAST ────────────────────────────────────────────────────────────────── */
+
 let toastTimer = null;
 function showToast(msg) {
   const el = document.getElementById('toast');
